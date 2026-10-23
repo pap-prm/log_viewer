@@ -1,1 +1,52 @@
 @import "tailwindcss";
+
+/* Custom scrollbar for log viewer */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1f2e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* Selection color */
+::selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: #e5e7eb;
+}
+
+/* Smooth transitions */
+* {
+  scrollbar-color: #374151 #1a1f2e;
+}
+
+/* Log line hover effect */
+.log-line:hover {
+  background-color: rgba(31, 41, 55, 0.5);
+}
+
+/* Animation for pulse */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Font smoothing */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
