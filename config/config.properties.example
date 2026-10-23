@@ -1,0 +1,59 @@
+# ============================================================
+#  Конфигурация web-сервиса просмотра логов (log-viewer)
+#  Файл размещается в /etc/log-viewer/config.properties
+#  Права: root:logviewer, chmod 640 (в файле есть пароль!)
+# ============================================================
+
+# ---------- Папка с логами (ЗАДАЁТСЯ ЗДЕСЬ) ----------
+# Из какой папки читаются логи. Сервис показывает только обычные файлы
+# с перечисленными ниже расширениями; выход за пределы папки невозможен.
+logs.dir=/opt/assembly_visual/logs/
+
+# Расширения файлов логов (через запятую)
+logs.file.suffixes=.log,.txt,.out
+
+# Сколько максимум строк "хвоста" отдавать за один запрос
+logs.max.tail.lines=5000
+# Обрезать слишком длинные строки (символов)
+logs.max.line.length=4096
+
+# ---------- HTTP сервер ----------
+server.port=5555
+server.bind=0.0.0.0
+
+# HTTPS для самого веб-интерфейса (необязательно, но рекомендуется).
+# Keystore PKCS12 генерируется keytool (см. README, шаг 7).
+server.https.enabled=false
+server.https.keystore.path=/etc/log-viewer/keystore.p12
+server.https.keystore.password=CHANGE_ME
+
+# Время жизни сессии после последнего обращения (минуты)
+server.session.timeout.minutes=120
+
+# ---------- Доступ: MS Active Directory через LDAPS (ОБЯЗАТЕЛЬНО) ----------
+ldap.enabled=true
+
+# ТОЛЬКО ldaps:// (порт 636). Открытый ldap:// без StartTLS сервис не примет -
+# это проверка на уровне конфигурации.
+ldap.url=ldaps://dc01.corp.local:636
+
+# Сервисная учётная запись AD, от имени которой выполняется поиск пользователей
+# и проверка членства в группах. Достаточно прав "Read" на контейнер пользователей.
+ldap.bind.dn=CN=logviewer-svc,OU=Service Accounts,DC=corp,DC=local
+ldap.bind.password=CHANGE_ME_SERVICE_PASSWORD
+
+# Разрешённые группы MS AD (через запятую). Можно указывать CN группы
+# (например "LogViewers") или полный DN. Пользователь должен состоять
+# хотя бы в одной из них (учитываются вложенные группы - tokenGroups).
+ldap.allowed.groups=LogViewers
+
+# Опционально: отдельный truststore (JKS/PKCS12) с сертификатом AD для проверки
+# TLS-цепочки LDAPS. Если пусто - используется стандартный cacerts JDK.
+ldap.truststore.path=
+ldap.truststore.password=
+
+# Проверять hostname сертификата КД (рекомендуется true)
+ldap.tls.verify.hostname=true
+# Использовать StartTLS вместо implicit LDAPS (только вместе с ldap:// порт 389)
+ldap.starttls=false
+ldap.connect.timeout.ms=5000

@@ -1,0 +1,40 @@
+[Unit]
+Description=Assembly Visual Log Viewer (web-сервис просмотра логов, порт 5555)
+Documentation=file:/opt/log-viewer/README.md
+After=network-online.target remote-fs.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=logviewer
+Group=logviewer
+
+# Конфиг-файл: путь к папке логов и параметрам LDAPS задаётся именно в нём
+Environment=LOGVIEWER_CONFIG=/etc/log-viewer/config.properties
+ExecStart=/usr/bin/java -Xms64m -Xmx256m -jar /opt/log-viewer/log-viewer.jar ${LOGVIEWER_CONFIG}
+
+Restart=on-failure
+RestartSec=5
+
+# ---------- Жёсткая изоляция (systemd hardening) ----------
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# Сервису нужны: конфиг (чтение), jar (чтение), папка логов (только чтение!)
+ReadWritePaths=/var/log/log-viewer
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+RestrictRealtime=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=log-viewer
+
+[Install]
+WantedBy=multi-user.target

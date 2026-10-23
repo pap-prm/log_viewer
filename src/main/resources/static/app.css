@@ -1,0 +1,133 @@
+/* Просмотр логов - оформление. Тёмная тема, как у большинства log-viewer'ов. */
+:root {
+  --bg: #14161a;
+  --bg2: #1d2025;
+  --fg: #d7dae0;
+  --muted: #8b919c;
+  --accent: #3d7eff;
+  --border: #2c3038;
+  --line-h: 1.55rem;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--bg); color: var(--fg);
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ---------- Страница входа ---------- */
+.login-body {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 50% -10%, #223 0%, var(--bg) 60%);
+}
+.login-card {
+  width: 380px; max-width: 92vw;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 28px 30px; box-shadow: 0 10px 40px rgba(0,0,0,.5);
+}
+.login-card h1 { margin: 0 0 6px; font-size: 1.4rem; }
+.login-card .muted { margin: 0 0 18px; color: var(--muted); font-size: .85rem; }
+.login-card label { display: block; margin: 12px 0 4px; font-size: .85rem; color: var(--muted); }
+.login-card input {
+  width: 100%; padding: 9px 11px; border-radius: 6px;
+  border: 1px solid var(--border); background: #12141a; color: var(--fg);
+  font-size: .95rem;
+}
+.login-card input:focus { outline: none; border-color: var(--accent); }
+.login-card button {
+  margin-top: 20px; width: 100%; padding: 10px;
+  background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+  font-size: 1rem; cursor: pointer;
+}
+.login-card button:hover { filter: brightness(1.1); }
+
+.alert { padding: 10px 12px; border-radius: 6px; font-size: .85rem; margin-bottom: 8px; }
+.alert-error { background: #3a1518; color: #ff9d9d; border: 1px solid #6b2329; }
+
+/* ---------- Просмотр ---------- */
+.viewer-body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.topbar {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  padding: 10px 14px; background: var(--bg2); border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 600; margin-right: 8px; white-space: nowrap; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 1; }
+
+.toolbar select, .toolbar input[type=search] {
+  background: #12141a; color: var(--fg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 8px; font-size: .85rem;
+}
+.toolbar input[type=search] { min-width: 180px; }
+#fileSelect { max-width: 320px; }
+
+.level-filters { display: flex; gap: 8px; font-size: .8rem; color: var(--muted); flex-wrap: wrap; }
+.level-filters label { display: inline-flex; gap: 3px; align-items: center; cursor: pointer; }
+
+button#btnRefresh {
+  background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+  padding: 7px 14px; cursor: pointer; font-size: .85rem;
+}
+button#btnRefresh:disabled { opacity: .5; cursor: default; }
+
+.autoscroll { font-size: .8rem; color: var(--muted); display: inline-flex; gap: 4px; align-items: center; }
+
+.userbox { margin-left: auto; display: flex; gap: 10px; align-items: center; font-size: .85rem; }
+.username { color: var(--muted); }
+.logout { color: var(--accent); text-decoration: none; }
+.logout:hover { text-decoration: underline; }
+
+main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+.status {
+  padding: 4px 14px; font-size: .78rem; color: var(--muted);
+  background: var(--bg); border-bottom: 1px solid var(--border);
+  min-height: 1.4em;
+}
+.status.error { color: #ff9d9d; }
+
+.logview {
+  flex: 1; margin: 0; overflow: auto;
+  background: #101216;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  font-size: .82rem; line-height: var(--line-h);
+  padding: 6px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.logview .empty { color: var(--muted); padding: 12px; }
+
+/* Строка лога: номер + содержимое */
+.line { display: flex; }
+.line:hover { background: #1a1e26; }
+.ln {
+  flex: 0 0 5.5em; text-align: right; padding: 0 .9em 0 .4em;
+  color: #565d6b; user-select: none; border-right: 1px solid #22262e;
+  font-size: .75rem; line-height: var(--line-h);
+}
+.lc { flex: 1; padding-left: .9em; }
+
+/* Подсветка уровней всей строки */
+.line.lv-FATAL  { background: #4a1114; }
+.line.lv-ERROR  { background: #34161a; }
+.line.lv-WARN   { background: #33290f; }
+.line.lv-DEBUG  { color: #7d8590; }
+
+/* Подсветка самих ключевых слов */
+.hl { font-weight: 700; border-radius: 3px; padding: 0 2px; }
+.hl-fatal  { color: #fff; background: #b3001b; }
+.hl-error  { color: #ffb3b3; background: #6e1122; }
+.hl-warn   { color: #ffd66b; background: #5c4407; }
+.hl-info   { color: #7fd0ff; background: transparent; }
+.hl-debug  { color: #9aa4b2; background: transparent; }
+.hl-other  { color: #d7dae0; background: transparent; }
+
+/* Подсветка найденного поиском фрагмента */
+mark { background: #f4d03f; color: #1a1a1a; border-radius: 2px; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #333944; border-radius: 5px; }
+::-webkit-scrollbar-track { background: #14161a; }
