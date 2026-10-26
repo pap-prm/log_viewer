@@ -1,0 +1,40 @@
+{
+  "server": {
+    "port": 3001,
+    "host": "0.0.0.0"
+  },
+  "logs": {
+    "directory": "/opt/assembly_visual/logs/",
+    "filePattern": "*.log",
+    "maxFileSize": 104857600,
+    "maxFiles": 100
+  },
+  "security": {
+    "whitelist": {
+      "enabled": true,
+      "ips": [
+        "127.0.0.1",
+        "::1",
+        "192.168.1.0/24",
+        "10.0.0.0/8"
+      ],
+      "domains": []
+    },
+    "cors": {
+      "enabled": true,
+      "origins": [
+        "http://localhost:3000",
+        "http://localhost:3001"
+      ]
+    }
+  },
+  "features": {
+    "enableUpload": true,
+    "enableDownload": true,
+    "maxUploadSize": 52428800
+  },
+  "logging": {
+    "level": "info",
+    "file": "/var/log/log-viewer/server.log"
+  }
+}

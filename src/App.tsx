@@ -1,64 +1,179 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FileList } from './components/FileList';
 import { LogViewer } from './components/LogViewer';
 import { demoFiles } from './utils/demoData';
 import { LogFile } from './utils/logParser';
-import { downloadLogFile } from './utils/download';
+import { downloadLogFile as downloadLocalFile } from './utils/download';
+import { fetchLogFiles, fetchLogFile, uploadLogFile, checkServerHealth } from './utils/api';
 
 function App() {
   const [files, setFiles] = useState<LogFile[]>(demoFiles);
   const [selectedFile, setSelectedFile] = useState<string | null>(demoFiles[0].name);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [serverMode, setServerMode] = useState(false);
+  const [serverConnected, setServerConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentFile = files.find(f => f.name === selectedFile);
 
-  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  // Проверка доступности сервера при загрузке
+  useEffect(() => {
+    const checkServer = async () => {
+      const isAvailable = await checkServerHealth();
+      if (isAvailable) {
+        setServerMode(true);
+        setServerConnected(true);
+        // Загружаем список файлов с сервера
+        try {
+          const serverFiles = await fetchLogFiles();
+          const logFiles: LogFile[] = serverFiles.map(f => ({
+            name: f.name,
+            size: f.size,
+            lastModified: new Date(f.lastModified).toLocaleString('ru-RU'),
+            content: '' // Контент загрузим при выборе
+          }));
+          setFiles(logFiles);
+          if (logFiles.length > 0) {
+            setSelectedFile(logFiles[0].name);
+          }
+        } catch (err) {
+          console.error('Ошибка загрузки списка файлов с сервера:', err);
+        }
+      } else {
+        setServerMode(false);
+        setServerConnected(false);
+      }
+    };
+    checkServer();
+  }, []);
+
+  // Загрузка содержимого файла при выборе
+  useEffect(() => {
+    if (serverMode && selectedFile && !files.find(f => f.name === selectedFile)?.content) {
+      const loadFile = async () => {
+        setLoading(true);
+        try {
+          const fileData = await fetchLogFile(selectedFile);
+          setFiles(prev => prev.map(f => 
+            f.name === selectedFile 
+              ? { ...f, content: fileData.content, size: fileData.size }
+              : f
+          ));
+        } catch (err) {
+          console.error('Ошибка загрузки файла:', err);
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadFile();
+    }
+  }, [selectedFile, serverMode]);
+
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = event.target.files;
     if (!uploadedFiles) return;
 
-    Array.from(uploadedFiles).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target?.result as string;
-        const newFile: LogFile = {
-          name: file.name,
-          size: file.size,
-          lastModified: new Date(file.lastModified).toLocaleString('ru-RU'),
-          content,
+    if (serverMode) {
+      // Загрузка на сервер
+      for (const file of Array.from(uploadedFiles)) {
+        try {
+          setLoading(true);
+          await uploadLogFile(file);
+          // Обновляем список файлов
+          const serverFiles = await fetchLogFiles();
+          const logFiles: LogFile[] = serverFiles.map(f => ({
+            name: f.name,
+            size: f.size,
+            lastModified: new Date(f.lastModified).toLocaleString('ru-RU'),
+            content: ''
+          }));
+          setFiles(logFiles);
+        } catch (err) {
+          console.error('Ошибка загрузки файла на сервер:', err);
+          alert('Ошибка загрузки файла на сервер');
+        } finally {
+          setLoading(false);
+        }
+      }
+    } else {
+      // Локальная загрузка
+      Array.from(uploadedFiles).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target?.result as string;
+          const newFile: LogFile = {
+            name: file.name,
+            size: file.size,
+            lastModified: new Date(file.lastModified).toLocaleString('ru-RU'),
+            content,
+          };
+          setFiles(prev => [...prev, newFile]);
+          setSelectedFile(file.name);
         };
-        setFiles(prev => [...prev, newFile]);
-        setSelectedFile(file.name);
-      };
-      reader.readAsText(file);
-    });
+        reader.readAsText(file);
+      });
+    }
     
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, []);
+  }, [serverMode]);
 
-  const handleDrop = useCallback((event: React.DragEvent) => {
+  const handleDrop = useCallback(async (event: React.DragEvent) => {
     event.preventDefault();
     const droppedFiles = event.dataTransfer.files;
     
-    Array.from(droppedFiles).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target?.result as string;
-        const newFile: LogFile = {
-          name: file.name,
-          size: file.size,
-          lastModified: new Date(file.lastModified).toLocaleString('ru-RU'),
-          content,
+    if (serverMode) {
+      for (const file of Array.from(droppedFiles)) {
+        try {
+          setLoading(true);
+          await uploadLogFile(file);
+          const serverFiles = await fetchLogFiles();
+          const logFiles: LogFile[] = serverFiles.map(f => ({
+            name: f.name,
+            size: f.size,
+            lastModified: new Date(f.lastModified).toLocaleString('ru-RU'),
+            content: ''
+          }));
+          setFiles(logFiles);
+        } catch (err) {
+          console.error('Ошибка загрузки файла на сервер:', err);
+        } finally {
+          setLoading(false);
+        }
+      }
+    } else {
+      Array.from(droppedFiles).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target?.result as string;
+          const newFile: LogFile = {
+            name: file.name,
+            size: file.size,
+            lastModified: new Date(file.lastModified).toLocaleString('ru-RU'),
+            content,
+          };
+          setFiles(prev => [...prev, newFile]);
+          setSelectedFile(file.name);
         };
-        setFiles(prev => [...prev, newFile]);
-        setSelectedFile(file.name);
-      };
-      reader.readAsText(file);
-    });
-  }, []);
+        reader.readAsText(file);
+      });
+    }
+  }, [serverMode]);
+
+  const handleDownload = useCallback(() => {
+    if (!currentFile) return;
+    
+    if (serverMode) {
+      // Скачивание через сервер
+      const url = `http://localhost:3001/api/download/${encodeURIComponent(currentFile.name)}`;
+      window.open(url, '_blank');
+    } else {
+      // Локальное скачивание
+      downloadLocalFile(currentFile.content, currentFile.name);
+    }
+  }, [currentFile, serverMode]);
 
   return (
     <div
@@ -86,7 +201,9 @@ function App() {
             </div>
             <div>
               <h1 className="text-sm font-bold text-gray-100">Log Viewer</h1>
-              <p className="text-[10px] text-gray-500">Assembly Visual — /opt/assembly_visual/logs/</p>
+              <p className="text-[10px] text-gray-500">
+                {serverMode ? 'Серверный режим' : 'Локальный режим'} — /opt/assembly_visual/logs/
+              </p>
             </div>
           </div>
         </div>
@@ -102,19 +219,20 @@ function App() {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-md transition-colors"
+            disabled={loading}
+            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white text-xs font-medium rounded-md transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
-            Загрузить
+            {loading ? 'Загрузка...' : 'Загрузить'}
           </button>
           
-          {/* Быстрое скачивание текущего файла */}
           {currentFile && (
             <button
-              onClick={() => downloadLogFile(currentFile.content, currentFile.name)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs font-medium rounded-md transition-colors"
+              onClick={handleDownload}
+              disabled={loading}
+              className="flex items-center gap-2 px-3 py-1.5 bg-green-700 hover:bg-green-600 disabled:bg-gray-600 text-white text-xs font-medium rounded-md transition-colors"
               title={`Скачать ${currentFile.name}`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -125,7 +243,7 @@ function App() {
           )}
           
           <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-700 rounded text-xs text-gray-400">
-            <span className="w-2 h-2 rounded-full bg-green-500"></span>
+            <span className={`w-2 h-2 rounded-full ${serverConnected ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
             {files.length} файлов
           </div>
         </div>
@@ -148,7 +266,14 @@ function App() {
 
         {/* Log viewer */}
         <main className="flex-1 overflow-hidden">
-          {currentFile ? (
+          {loading && !currentFile?.content ? (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <p className="text-sm">Загрузка файла...</p>
+              </div>
+            </div>
+          ) : currentFile?.content ? (
             <LogViewer content={currentFile.content} fileName={currentFile.name} />
           ) : (
             <div className="flex items-center justify-center h-full text-gray-500">
@@ -158,24 +283,13 @@ function App() {
                 </svg>
                 <p className="text-lg font-medium mb-2">Выберите файл лога</p>
                 <p className="text-sm text-gray-600">Выберите файл из списка слева или загрузите свой</p>
-                <p className="text-xs text-gray-700 mt-4">Также можно перетащить файл в это окно</p>
+                <p className="text-xs text-gray-700 mt-4">
+                  {serverMode ? 'Режим сервера — файлы загружаются с /opt/assembly_visual/logs/' : 'Локальный режим — можно перетащить файл в это окно'}
+                </p>
               </div>
             </div>
           )}
         </main>
-      </div>
-
-      {/* Drop zone overlay */}
-      <div
-        className="hidden fixed inset-0 z-50 bg-blue-900/50 backdrop-blur-sm items-center justify-center pointer-events-none"
-        id="drop-overlay"
-      >
-        <div className="text-center text-white">
-          <svg className="w-20 h-20 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
-          <p className="text-xl font-medium">Перетащите лог-файл сюда</p>
-        </div>
       </div>
     </div>
   );
