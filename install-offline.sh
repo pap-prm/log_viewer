@@ -43,11 +43,6 @@ if ! command -v node &> /dev/null; then
     echo ""
     echo "Установите Node.js из локального репозитория или RPM-пакета:"
     echo "  sudo dnf install -y nodejs npm"
-    echo ""
-    echo "Или из оффлайн RPM (если есть в пакете):"
-    if [ -d "rpm-packages" ]; then
-        echo "  sudo dnf install --disablerepo='*' rpm-packages/*.rpm"
-    fi
     exit 1
 fi
 
@@ -68,7 +63,6 @@ echo -e "${YELLOW}[3/8] Создание директорий...${NC}"
 mkdir -p "$APP_DIR"
 mkdir -p "$LOG_DIR"
 mkdir -p "$WEB_DIR"
-# Директория с логами должна существовать
 if [ ! -d "/opt/assembly_visual/logs" ]; then
     echo -e "${YELLOW}⚠ Директория /opt/assembly_visual/logs не найдена${NC}"
     mkdir -p /opt/assembly_visual/logs
@@ -80,32 +74,29 @@ echo -e "${GREEN}✓ Директории созданы${NC}"
 
 # 4. Установка приложения
 echo -e "${YELLOW}[4/8] Установка приложения...${NC}"
-cp -r ./* "$APP_DIR/"
+# Копируем всё кроме архивов и временных файлов
+rsync -a --exclude='*.tar.gz' --exclude='.git' \
+    --exclude='install-offline.sh' --exclude='prepare-offline.sh' \
+    --exclude='build-dist-only.sh' --exclude='install-server.sh' \
+    ./ "$APP_DIR/"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR"
 chmod -R 755 "$APP_DIR"
-chmod 600 "$APP_DIR/config.json"
+chmod 600 "$APP_DIR/config.json" 2>/dev/null || true
 echo -e "${GREEN}Приложение установлено в $APP_DIR${NC}"
 
 # 5. Установка зависимостей (оффлайн)
-echo -e "${YELLOW}[5/8] Установка npm-зависисей (оффлайн)...${NC}"
+echo -e "${YELLOW}[5/8] Установка npm-зависимостей (оффлайн)...${NC}"
 cd "$APP_DIR"
 
-# Способ 1: из локального кэша
-if [ -d "npm-cache" ]; then
+if [ -d "node_modules" ]; then
+    echo -e "${GREEN}node_modules уже присутствуют в пакете${NC}"
+elif [ -d "npm-cache" ]; then
     echo "Используем локальный npm-кэш..."
     export npm_config_cache="$APP_DIR/npm-cache"
     npm ci --offline --prefer-offline 2>/dev/null || npm install --offline --prefer-offline
-fi
-
-# Способ 2: из offline-packages
-if [ -d "offline-packages" ] && [ "$(ls -A offline-packages/*.tgz 2>/dev/null)" ]; then
+elif [ -d "offline-packages" ] && ls offline-packages/*.tgz 1>/dev/null 2>&1; then
     echo "Устанавливаем из локальных пакетов..."
     npm install offline-packages/*.tgz --offline --ignore-scripts 2>/dev/null || true
-fi
-
-# Способ 3: если node_modules уже есть в пакете
-if [ -d "node_modules" ]; then
-    echo -e "${GREEN}node_modules уже присутствуют в пакете${NC}"
 else
     echo -e "${YELLOW}Попытка установки из кэша npm...${NC}"
     npm ci --offline 2>/dev/null || npm install --offline 2>/dev/null || {
@@ -113,10 +104,9 @@ else
         npm ci 2>/dev/null || npm install
     }
 fi
-
 echo -e "${GREEN}Зависимости установлены${NC}"
 
-# 6. Сборка
+# 6. Сборка (если нужно)
 echo -e "${YELLOW}[6/8] Сборка production-версии...${NC}"
 cd "$APP_DIR"
 if [ ! -d "dist" ]; then
@@ -141,7 +131,6 @@ if command -v semanage &> /dev/null; then
     semanage fcontext -a -t httpd_sys_content_t "$WEB_DIR(/.*)?" 2>/dev/null || true
     restorecon -Rv "$WEB_DIR" 2>/dev/null || true
 fi
-
 echo -e "${GREEN}Веб-файлы размещены в $WEB_DIR${NC}"
 
 # 8. Создание systemd-сервиса

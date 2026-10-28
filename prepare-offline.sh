@@ -32,8 +32,11 @@ mkdir -p "$PACKAGE_DIR"
 echo -e "${YELLOW}[1/6] Копирование исходного кода...${NC}"
 # Копируем все файлы проекта, кроме node_modules и dist
 rsync -av --exclude='node_modules' --exclude='dist' --exclude='.git' \
-    --exclude='*.sh' --exclude='offline-packages' --exclude='npm-cache' \
+    --exclude='prepare-offline.sh' --exclude='build-dist-only.sh' \
+    --exclude='install-server.sh' \
+    --exclude='offline-packages' --exclude='npm-cache' \
     --exclude='readlog-offline-*' --exclude='log-viewer-offline-*' \
+    --exclude='readlog-dist-*' --exclude='log-viewer-dist-*' \
     ./ "$PACKAGE_DIR/"
 
 echo -e "${YELLOW}[2/6] Установка зависимостей...${NC}"
