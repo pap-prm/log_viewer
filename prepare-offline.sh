@@ -30,8 +30,9 @@ PACKAGE_DIR="readlog-offline-$(date +%Y%m%d)"
 mkdir -p "$PACKAGE_DIR"
 
 echo -e "${YELLOW}[1/6] Копирование исходного кода...${NC}"
-# Копируем все файлы проекта, кроме node_modules и dist
-rsync -av --exclude='node_modules' --exclude='dist' --exclude='.git' \
+# Копируем все файлы проекта, ВКЛЮЧАЯ node_modules для оффлайн установки
+# Исключаем только временные файлы и старые сборки
+rsync -av --exclude='dist' --exclude='.git' \
     --exclude='prepare-offline.sh' --exclude='build-dist-only.sh' \
     --exclude='install-server.sh' \
     --exclude='offline-packages' --exclude='npm-cache' \
@@ -68,9 +69,17 @@ for pkg in $(find . -maxdepth 2 -name "package.json" -exec dirname {} \; | sed '
 done
 cd ../..
 
-echo -e "${YELLOW}[5/6] Сборка production-версии...${NC}"
+echo -e "${YELLOW}[5/6] Сборка production-версии и подготовка структуры...${NC}"
 cd "$PACKAGE_DIR"
 npm run build
+
+# Копируем server.js и package.json из server/ в корень для удобства установки
+if [ -f "server/server.js" ]; then
+    cp server/server.js server.js
+    cp server/package.json package.json
+    cp server/config.json config.json 2>/dev/null || true
+    echo "✓ server.js, package.json, config.json скопированы в корень"
+fi
 
 echo -e "${YELLOW}[6/6] Создание архива...${NC}"
 cd ..
