@@ -18,6 +18,24 @@ server/
 └── package.json     ← Зависимости Node.js
 ```
 
+## Структура установки на сервере
+
+```
+/opt/readlog/                      ← Приложение
+├── server.js                      ← Node.js сервер
+├── config.json                    ← Конфигурация
+└── node_modules/                  ← Зависимости
+
+/var/www/html/readlog/             ← Статические файлы (стандартная директория Apache)
+├── index.html
+└── assets/
+
+/opt/assembly_visual/logs/         ← Логи Java приложения (источник данных)
+/var/log/readlog/                  ← Логи сервиса
+
+/etc/httpd/conf.d/readlog.conf     ← Конфиг Apache
+```
+
 ## Установка
 
 ### На машине разработки (сборка фронтенда)
@@ -40,7 +58,9 @@ chmod +x install-server.sh
 sudo ./install-server.sh
 
 # Приложение будет установлено в /opt/readlog
+# Веб-файлы будут размещены в /var/www/html/readlog/
 # Логи сервиса: /var/log/readlog/
+# Доступ: http://server-ip/readlog/
 ```
 
 ## Конфигурация безопасности
@@ -191,11 +211,11 @@ sudo ./install-server.sh
 ## Управление сервисом
 
 ```bash
-sudo systemctl start log-viewer-server
-sudo systemctl stop log-viewer-server
-sudo systemctl restart log-viewer-server
-sudo systemctl status log-viewer-server
-sudo journalctl -u log-viewer-server -f
+sudo systemctl start readlog
+sudo systemctl stop readlog
+sudo systemctl restart readlog
+sudo systemctl status readlog
+sudo journalctl -u readlog -f
 ```
 
 ## Проверка работы
@@ -204,11 +224,17 @@ sudo journalctl -u log-viewer-server -f
 # Информация о сервере
 curl http://server:3001/api/info
 
+# Веб-интерфейс
+# Откройте в браузере: http://server-ip/readlog/
+
 # С запрещённого IP — получите 403
 # Без авторизации (если auth.enabled=true) — получите 401
 
 # Проверить логи:
-sudo tail -f /var/log/log-viewer/server.log
+sudo tail -f /var/log/readlog/server.log
+
+# Проверить веб-файлы:
+ls -la /var/www/html/readlog/
 ```
 
 ## Отладка
@@ -216,7 +242,7 @@ sudo tail -f /var/log/log-viewer/server.log
 ### Если доступ запрещён (403):
 1. Проверьте свой IP: `curl ifconfig.me`
 2. Добавьте его в `security.whitelist.ips`
-3. Перезапустите: `sudo systemctl restart log-viewer-server`
+3. Перезапустите: `sudo systemctl restart readlog`
 
 ### Если требуется авторизация (401):
 1. Проверьте настройки LDAP в `config.json`

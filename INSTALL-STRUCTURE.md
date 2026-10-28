@@ -2,21 +2,22 @@
 
 ## Обзор
 
-Приложение устанавливается в директорию `/opt/readlog`
+Приложение устанавливается в директорию `/opt/readlog`, веб-файлы размещаются в стандартной директории Apache `/var/www/html/readlog/`
 
 ## Структура директорий
 
 ```
 /opt/readlog/                      ← Корневая директория приложения
-├── www/                           ← Статические файлы (для Apache)
-│   ├── index.html
-│   └── assets/
-│       ├── index-*.js
-│       └── index-*.css
 ├── server.js                      ← Node.js сервер
 ├── config.json                    ← Конфигурация приложения
 ├── package.json                   ← Зависимости Node.js
 └── node_modules/                  ← Установленные зависимости
+
+/var/www/html/readlog/             ← Статические файлы (стандартная директория Apache)
+├── index.html
+└── assets/
+    ├── index-*.js
+    └── index-*.css
 
 /opt/assembly_visual/logs/         ← Логи Java приложения (источник данных)
 ├── app-2026-10-22.log
@@ -36,7 +37,7 @@
 
 **Команда:** `./build-dist-only.sh`  
 **Размер:** ~10 MB  
-**Путь установки:** `/opt/readlog/www/`  
+**Путь установки веб-файлов:** `/var/www/html/readlog/`  
 **Node.js на сервере:** НЕ нужен
 
 ```bash
@@ -50,8 +51,8 @@ cd readlog-dist-* && sudo ./install.sh
 ```
 
 **Что делает install.sh:**
-- Создаёт `/opt/readlog/www/`
-- Копирует файлы из `dist/` в `/opt/readlog/www/`
+- Создаёт `/var/www/html/readlog/`
+- Копирует файлы из `dist/` в `/var/www/html/readlog/`
 - Копирует конфиг в `/etc/httpd/conf.d/readlog.conf`
 - Настраивает SELinux и firewall
 - Перезапускает Apache
@@ -62,7 +63,8 @@ cd readlog-dist-* && sudo ./install.sh
 
 **Команда:** `./prepare-offline.sh`  
 **Размер:** ~100-200 MB  
-**Путь установки:** `/opt/readlog/`  
+**Путь установки приложения:** `/opt/readlog/`  
+**Путь веб-файлов:** `/var/www/html/readlog/`  
 **Node.js на сервере:** Нужен
 
 ```bash
@@ -81,6 +83,7 @@ cd readlog-offline-* && sudo ./install-offline.sh
 - Копирует приложение в `/opt/readlog/`
 - Устанавливает npm-зависимости
 - Собирает production-версию
+- **Копирует веб-файлы в `/var/www/html/readlog/`**
 - Создаёт systemd-сервис `readlog`
 - Настраивает SELinux и firewall
 
@@ -89,7 +92,7 @@ cd readlog-offline-* && sudo ./install-offline.sh
 ## Управление сервисом
 
 ```bash
-# Запуск/остановка/перезапуск
+# Запуск/остановка/перезапуск API сервера
 sudo systemctl start readlog
 sudo systemctl stop readlog
 sudo systemctl restart readlog
@@ -101,6 +104,10 @@ sudo systemctl status readlog
 sudo journalctl -u readlog -f
 tail -f /var/log/readlog/server.log
 tail -f /var/log/readlog/error.log
+
+# Управление Apache
+sudo systemctl start httpd
+sudo systemctl restart httpd
 ```
 
 ---
@@ -140,8 +147,10 @@ sudo systemctl restart readlog
 ## Проверка работы
 
 ```bash
-# Проверить файлы
-ls -la /opt/readlog/www/
+# Проверить веб-файлы
+ls -la /var/www/html/readlog/
+
+# Проверить приложение
 ls -la /opt/readlog/
 
 # Проверить API
@@ -152,14 +161,14 @@ sudo systemctl status readlog
 sudo tail -f /var/log/readlog/server.log
 
 # Проверить SELinux
-ls -laZ /opt/readlog/
+ls -laZ /var/www/html/readlog/
 ```
 
 ---
 
 ## Обновление
 
-### Быстрое обновление (только dist/)
+### Быстрое обновление (только веб-файлы)
 
 ```bash
 # На машине с интернетом
@@ -168,8 +177,8 @@ tar -czf update.tar.gz dist/
 scp update.tar.gz server:/tmp/
 
 # На сервере
-sudo tar -xzf /tmp/update.tar.gz -C /opt/readlog/www/ --strip-components=1
-sudo systemctl restart readlog
+sudo tar -xzf /tmp/update.tar.gz --strip-components=1 -C /var/www/html/readlog/
+sudo systemctl restart httpd
 ```
 
 ### Полное обновление
@@ -194,14 +203,20 @@ sudo ./install-offline.sh
 sudo systemctl stop readlog
 sudo systemctl disable readlog
 
-# Удалить файлы
+# Удалить файлы приложения
 sudo rm -rf /opt/readlog
 sudo rm -rf /var/log/readlog
+
+# Удалить веб-файлы
+sudo rm -rf /var/www/html/readlog
+
+# Удалить конфиги
 sudo rm /etc/httpd/conf.d/readlog.conf
 sudo rm /etc/systemd/system/readlog.service
 
 # Перезагрузить systemd
 sudo systemctl daemon-reload
+sudo systemctl restart httpd
 
 # Удалить пользователя (опционально)
 sudo userdel readlog
@@ -267,6 +282,23 @@ ls -la /opt/readlog/
 sudo chown -R readlog:readlog /opt/readlog/
 ```
 
+### Веб-интерфейс не открывается
+
+```bash
+# Проверить что Apache запущен
+sudo systemctl status httpd
+
+# Проверить веб-файлы
+ls -la /var/www/html/readlog/
+
+# Проверить SELinux
+ls -laZ /var/www/html/readlog/
+sudo restorecon -Rv /var/www/html/readlog/
+
+# Проверить конфиг Apache
+sudo httpd -t
+```
+
 ---
 
 ## Итого
@@ -274,7 +306,7 @@ sudo chown -R readlog:readlog /opt/readlog/
 | Параметр | Значение |
 |----------|----------|
 | Директория приложения | `/opt/readlog/` |
-| Директория статики | `/opt/readlog/www/` |
+| Директория веб-файлов | `/var/www/html/readlog/` |
 | Директория с логами | `/opt/assembly_visual/logs/` |
 | Логи сервиса | `/var/log/readlog/` |
 | Пользователь сервиса | `readlog` |
@@ -282,3 +314,4 @@ sudo chown -R readlog:readlog /opt/readlog/
 | Порт API | `3001` |
 | Конфиг Apache | `/etc/httpd/conf.d/readlog.conf` |
 | Конфиг приложения | `/opt/readlog/config.json` |
+| URL веб-интерфейса | `http://server-ip/readlog/` |

@@ -1,4 +1,4 @@
-# Оффлайн установка Log Viewer — Сводка
+# Оффлайн установка ReadLog — Сводка
 
 ## Созданные файлы
 
@@ -20,7 +20,7 @@
 
 | Файл | Назначение |
 |------|-----------|
-| `apache-logviewer.conf` | Конфиг Apache (HTTP + HTTPS с AD авторизацией) |
+| `apache-logviewer.conf` | Конфиг Apache (копируется в `/etc/httpd/conf.d/readlog.conf`) |
 
 ### Документация
 
@@ -28,6 +28,7 @@
 |------|-----------|
 | `QUICKSTART.md` | Быстрый старт (3 команды) |
 | `README-OFFLINE.md` | Полная документация по всем вариантам установки |
+| `INSTALL-STRUCTURE.md` | Структура директорий после установки |
 
 ---
 
@@ -42,11 +43,11 @@
 ```bash
 # На машине с интернетом
 ./build-dist-only.sh
-scp log-viewer-dist-*.tar.gz server:/tmp/
+scp readlog-dist-*.tar.gz server:/tmp/
 
 # На сервере
-cd /tmp && tar -xzf log-viewer-dist-*.tar.gz
-cd log-viewer-dist-* && sudo ./install.sh
+cd /tmp && tar -xzf readlog-dist-*.tar.gz
+cd readlog-dist-* && sudo ./install.sh
 ```
 
 ### Вариант 2: Полная установка с пересборкой
@@ -58,11 +59,11 @@ cd log-viewer-dist-* && sudo ./install.sh
 ```bash
 # На машине с интернетом
 ./prepare-offline.sh
-scp log-viewer-offline-*.tar.gz server:/tmp/
+scp readlog-offline-*.tar.gz server:/tmp/
 
 # На сервере
-cd /tmp && tar -xzf log-viewer-offline-*.tar.gz
-cd log-viewer-offline-* && sudo ./install-offline.sh
+cd /tmp && tar -xzf readlog-offline-*.tar.gz
+cd readlog-offline-* && sudo ./install-offline.sh
 ```
 
 ---
@@ -72,7 +73,7 @@ cd log-viewer-offline-* && sudo ./install-offline.sh
 ### Пакет от `build-dist-only.sh`
 
 ```
-log-viewer-dist-YYYYMMDD/
+readlog-dist-YYYYMMDD/
 ├── dist/                    ← Production-сборка (готовый сайт)
 │   ├── index.html
 │   └── assets/
@@ -85,7 +86,7 @@ log-viewer-dist-YYYYMMDD/
 ### Пакет от `prepare-offline.sh`
 
 ```
-log-viewer-offline-YYYYMMDD/
+readlog-offline-YYYYMMDD/
 ├── src/                     ← Исходный код
 ├── dist/                    ← Production-сборка
 ├── node_modules/            ← Установленные зависимости
@@ -102,58 +103,58 @@ log-viewer-offline-YYYYMMDD/
 
 ---
 
-## AD-авторизация
+## Структура установки на сервере
 
-После установки отредактируйте `/etc/httpd/conf.d/logviewer.conf`:
-
-```apache
-<Location />
-    AuthType            basic
-    AuthName            "Log Viewer — AD Authorization"
-    AuthBasicProvider   ldap
-    AuthLDAPURL         "ldaps://dc01.company.local:636/DC=company,DC=local?sAMAccountName?sub?(objectClass=person)" TLS
-    AuthLDAPBindDN      "CN=ldap_bind,OU=Service,DC=company,DC=local"
-    AuthLDAPBindPassword "file:/etc/httpd/conf/ldap_bind_password"
-    
-    # Доступ только членам группы
-    Require ldap-group CN=LogViewers,OU=Groups,DC=company,DC=local
-</Location>
 ```
+/opt/readlog/                      ← Приложение (если полная установка)
+├── server.js                      ← Node.js сервер
+├── config.json                    ← Конфигурация
+└── node_modules/                  ← Зависимости
 
-Создайте файл с паролем:
-```bash
-sudo install -m 640 -o root -g apache /dev/null /etc/httpd/conf/ldap_bind_password
-echo -n "PasswordOfBindUser" | sudo tee /etc/httpd/conf/ldap_bind_password
-```
+/var/www/html/readlog/             ← Статические файлы (стандартная директория Apache)
+├── index.html
+└── assets/
+    ├── index-*.js
+    └── index-*.css
 
-Настройте SELinux:
-```bash
-sudo setsebool -P httpd_can_connect_ldap on
+/opt/assembly_visual/logs/         ← Логи Java приложения (источник данных)
+/var/log/readlog/                  ← Логи сервиса ReadLog
+
+/etc/httpd/conf.d/readlog.conf     ← Конфиг Apache
+/etc/systemd/system/readlog.service ← Systemd сервис
 ```
 
 ---
 
-## Проверка после установки
+## Доступ к веб-интерфейсу
+
+После установки веб-интерфейс доступен по адресу:
+```
+http://server-ip/readlog/
+```
+
+---
+
+## Управление сервисом
 
 ```bash
-# Статус Apache
-sudo systemctl status httpd
+# API сервер (если установлен)
+sudo systemctl start readlog       # Запуск
+sudo systemctl stop readlog        # Остановка
+sudo systemctl restart readlog     # Перезапуск
+sudo systemctl status readlog      # Статус
+sudo journalctl -u readlog -f      # Логи
 
-# Логи
-sudo tail -f /var/log/httpd/error_log
-
-# Файлы сайта
-ls -la /var/www/logviewer/
-
-# SELinux контекст
-ls -laZ /var/www/logviewer/
+# Apache
+sudo systemctl start httpd
+sudo systemctl restart httpd
 ```
 
 ---
 
 ## Обновление
 
-### Быстрое обновление (только dist/)
+### Быстрое обновление (только веб-файлы)
 
 ```bash
 # На машине с интернетом
@@ -162,7 +163,7 @@ tar -czf update.tar.gz dist/
 scp update.tar.gz server:/tmp/
 
 # На сервере
-sudo tar -xzf /tmp/update.tar.gz -C /var/www/logviewer/ --strip-components=1
+sudo tar -xzf /tmp/update.tar.gz --strip-components=1 -C /var/www/html/readlog/
 sudo systemctl restart httpd
 ```
 
@@ -172,10 +173,11 @@ sudo systemctl restart httpd
 
 | Проблема | Решение |
 |----------|---------|
-| 403 Forbidden | Проверить SELinux: `sudo restorecon -Rv /var/www/logviewer/` |
+| 403 Forbidden | Проверить SELinux: `sudo restorecon -Rv /var/www/html/readlog/` |
 | 500 Error | Проверить логи: `sudo tail /var/log/httpd/error_log` |
-| Нет доступа к AD | Проверить: `sudo setsebool -P httpd_can_connect_ldap on` |
+| API не работает | Проверить: `sudo journalctl -u readlog -n 50` |
 | Порт закрыт | Открыть: `sudo firewall-cmd --permanent --add-service=http` |
+| Веб-интерфейс не открывается | Проверить: `ls -la /var/www/html/readlog/` |
 
 ---
 
@@ -196,3 +198,10 @@ sudo systemctl restart httpd
 **Документация:**
 - Быстрый старт: `QUICKSTART.md`
 - Полная инструкция: `README-OFFLINE.md`
+- Структура установки: `INSTALL-STRUCTURE.md`
+
+**Ключевые пути:**
+- Приложение: `/opt/readlog/`
+- Веб-файлы: `/var/www/html/readlog/`
+- Логи Java: `/opt/assembly_visual/logs/`
+- URL: `http://server-ip/readlog/`

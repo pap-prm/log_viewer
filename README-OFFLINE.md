@@ -1,8 +1,8 @@
-# Log Viewer — Оффлайн установка на РЕД ОС 8.0.3
+# ReadLog — Оффлайн установка на РЕД ОС 8.0.3
 
 ## Обзор
 
-Этот пакет содержит всё необходимое для установки Log Viewer на сервер без доступа к интернету.
+Этот пакет содержит всё необходимое для установки ReadLog на сервер без доступа к интернету.
 
 **Состав пакета:**
 - Исходный код приложения (React + TypeScript + Vite)
@@ -11,11 +11,17 @@
 - Скрипты установки
 - Конфигурация Apache
 
+**Структура установки:**
+- Приложение: `/opt/readlog/`
+- Веб-файлы: `/var/www/html/readlog/` (стандартная директория Apache)
+- Логи Java: `/opt/assembly_visual/logs/`
+- Логи сервиса: `/var/log/readlog/`
+
 ---
 
 ## Вариант 1: Быстрая установка (только статический сайт)
 
-Если нужен **только веб-интерфейс** без dev-сервера:
+Если нужен **только веб-интерфейс** без API сервера:
 
 ### На машине с интернетом — подготовка
 
@@ -25,7 +31,7 @@ npm install
 npm run build
 
 # 2. Создать архив только с dist/
-tar -czf log-viewer-dist.tar.gz dist/ apache-logviewer.conf
+tar -czf readlog-dist.tar.gz dist/ apache-logviewer.conf
 ```
 
 ### На сервере РЕД ОС — установка
@@ -35,14 +41,14 @@ tar -czf log-viewer-dist.tar.gz dist/ apache-logviewer.conf
 sudo dnf install httpd
 
 # 2. Разместить файлы
-sudo mkdir -p /var/www/logviewer
-sudo tar -xzf log-viewer-dist.tar.gz -C /tmp
-sudo cp -r /tmp/dist/* /var/www/logviewer/
-sudo cp /tmp/apache-logviewer.conf /etc/httpd/conf.d/logviewer.conf
+sudo mkdir -p /var/www/html/readlog
+sudo tar -xzf readlog-dist.tar.gz -C /tmp
+sudo cp -r /tmp/dist/* /var/www/html/readlog/
+sudo cp /tmp/apache-logviewer.conf /etc/httpd/conf.d/readlog.conf
 
 # 3. Настроить SELinux
-sudo semanage fcontext -a -t httpd_sys_content_t "/var/www/logviewer(/.*)?"
-sudo restorecon -Rv /var/www/logviewer
+sudo semanage fcontext -a -t httpd_sys_content_t "/var/www/html/readlog(/.*)?"
+sudo restorecon -Rv /var/www/html/readlog
 
 # 4. Открыть порт в firewall
 sudo firewall-cmd --permanent --add-service=http
@@ -52,7 +58,7 @@ sudo firewall-cmd --reload
 sudo systemctl enable --now httpd
 ```
 
-**Готово!** Сайт доступен на `http://server-ip/`
+**Готово!** Сайт доступен на `http://server-ip/readlog/`
 
 ---
 
@@ -68,7 +74,7 @@ npm install
 chmod +x prepare-offline.sh
 ./prepare-offline.sh
 
-# Результат: файл log-viewer-offline-YYYYMMDD.tar.gz
+# Результат: файл readlog-offline-YYYYMMDD.tar.gz
 ```
 
 **Что делает скрипт:**
@@ -82,7 +88,7 @@ chmod +x prepare-offline.sh
 
 ```bash
 # Скопируйте архив на целевой сервер
-scp log-viewer-offline-*.tar.gz user@redos-server:/tmp/
+scp readlog-offline-*.tar.gz user@redos-server:/tmp/
 ```
 
 ### ЭТАП 3: Установка (на сервере БЕЗ интернета)
@@ -90,8 +96,8 @@ scp log-viewer-offline-*.tar.gz user@redos-server:/tmp/
 ```bash
 # 1. Распаковать архив
 cd /tmp
-tar -xzf log-viewer-offline-*.tar.gz
-cd log-viewer-offline-*
+tar -xzf readlog-offline-*.tar.gz
+cd readlog-offline-*
 
 # 2. Запустить установку
 chmod +x install-offline.sh
@@ -99,11 +105,11 @@ sudo ./install-offline.sh
 ```
 
 **Что делает скрипт:**
-- Создаёт пользователя `logviewer`
-- Копирует приложение в `/opt/log-viewer`
+- Создаёт пользователя `readlog`
+- Копирует приложение в `/opt/readlog/`
+- **Копирует веб-файлы в `/var/www/html/readlog/`**
 - Устанавливает npm-зависимости из локального кэша
 - Собирает production-версию (если нужно)
-- Размещает файлы в `/var/www/logviewer`
 - Настраивает SELinux
 - Создаёт systemd-сервис
 
@@ -113,8 +119,7 @@ sudo ./install-offline.sh
 # 1. Установить Apache (если ещё не установлен)
 sudo dnf install httpd
 
-# 2. Скопировать конфигурацию
-sudo cp /opt/log-viewer/apache-logviewer.conf /etc/httpd/conf.d/logviewer.conf
+# 2. Конфиг уже скопирован в /etc/httpd/conf.d/readlog.conf
 
 # 3. Настроить SELinux
 sudo setsebool -P httpd_can_network_connect on
@@ -148,7 +153,7 @@ done
 cd ..
 
 # 3. Создать архив
-tar -czf log-viewer-manual.tar.gz \
+tar -czf readlog-manual.tar.gz \
     --exclude='node_modules' \
     --exclude='.git' \
     . \
@@ -159,8 +164,8 @@ tar -czf log-viewer-manual.tar.gz \
 
 ```bash
 # 1. Распаковать
-tar -xzf log-viewer-manual.tar.gz
-cd log-viewer
+tar -xzf readlog-manual.tar.gz
+cd readlog
 
 # 2. Установить из локальных пакетов
 npm install npm-offline/*.tgz --offline
@@ -169,9 +174,9 @@ npm install npm-offline/*.tgz --offline
 npm run build
 
 # 4. Разместить для Apache
-sudo mkdir -p /var/www/logviewer
-sudo cp -r dist/* /var/www/logviewer/
-sudo chown -R root:apache /var/www/logviewer
+sudo mkdir -p /var/www/html/readlog
+sudo cp -r dist/* /var/www/html/readlog/
+sudo chown -R root:apache /var/www/html/readlog
 ```
 
 ---
@@ -179,13 +184,19 @@ sudo chown -R root:apache /var/www/logviewer
 ## Проверка установки
 
 ```bash
-# Проверить файлы
-ls -la /var/www/logviewer/
+# Проверить веб-файлы
+ls -la /var/www/html/readlog/
 # Должны быть: index.html, assets/
+
+# Проверить приложение
+ls -la /opt/readlog/
 
 # Проверить Apache
 sudo systemctl status httpd
-curl http://localhost/
+curl http://localhost/readlog/
+
+# Проверить API (если установлен)
+curl http://localhost:3001/api/info
 
 # Проверить SELinux
 getenforce
@@ -193,6 +204,7 @@ getenforce
 
 # Проверить логи
 sudo tail -f /var/log/httpd/error_log
+sudo tail -f /var/log/readlog/server.log
 ```
 
 ---
@@ -209,7 +221,7 @@ sudo tail -f /var/log/httpd/error_log
 npm run build
 
 # 3. Создать архив только с dist/
-tar -czf log-viewer-update-$(date +%Y%m%d).tar.gz dist/
+tar -czf readlog-update-$(date +%Y%m%d).tar.gz dist/
 ```
 
 ### На сервере
@@ -219,11 +231,10 @@ tar -czf log-viewer-update-$(date +%Y%m%d).tar.gz dist/
 sudo systemctl stop httpd
 
 # 2. Сделать бэкап
-sudo cp -r /var/www/logviewer /var/www/logviewer.backup.$(date +%Y%m%d)
+sudo cp -r /var/www/html/readlog /var/www/html/readlog.backup.$(date +%Y%m%d)
 
 # 3. Обновить файлы
-sudo tar -xzf log-viewer-update-*.tar.gz -C /tmp
-sudo cp -r /tmp/dist/* /var/www/logviewer/
+sudo tar -xzf readlog-update-*.tar.gz --strip-components=1 -C /var/www/html/readlog/
 
 # 4. Запустить Apache
 sudo systemctl start httpd
@@ -237,15 +248,15 @@ sudo systemctl start httpd
 
 ```bash
 # Проверить права
-sudo ls -la /var/www/logviewer/
+sudo ls -la /var/www/html/readlog/
 # Должно быть: root:apache, 755
 
 # Проверить SELinux
-sudo ls -laZ /var/www/logviewer/
+sudo ls -laZ /var/www/html/readlog/
 # Должно быть: httpd_sys_content_t
 
 # Исправить SELinux
-sudo restorecon -Rv /var/www/logviewer/
+sudo restorecon -Rv /var/www/html/readlog/
 ```
 
 ### Ошибка 500 Internal Server Error
@@ -268,25 +279,38 @@ sudo dnf install --disablerepo='*' /path/to/nodejs.rpm
 # См. Вариант 1
 ```
 
+### API сервер не запускается
+
+```bash
+# Проверить логи
+sudo journalctl -u readlog -n 50
+
+# Проверить конфиг
+sudo nano /opt/readlog/config.json
+
+# Проверить права
+sudo chown -R readlog:readlog /opt/readlog/
+```
+
 ---
 
 ## Структура файлов после установки
 
 ```
-/opt/log-viewer/              ← Исходный код + зависимости
-├── src/                      ← Исходники
-├── dist/                     ← Production-сборка
-├── node_modules/             ← Зависимости
-├── npm-cache/                ← Локальный кэш npm
-├── offline-packages/         ← Локальные .tgz пакеты
-├── install-offline.sh        ← Скрипт установки
-└── apache-logviewer.conf     ← Конфиг Apache
+/opt/readlog/              ← Исходный код + зависимости (если полная установка)
+├── server.js              ← Node.js сервер
+├── config.json            ← Конфигурация
+├── node_modules/          ← Зависимости
+└── package.json
 
-/var/www/logviewer/           ← Файлы для веб-сервера
+/var/www/html/readlog/     ← Файлы для веб-сервера (стандартная директория Apache)
 ├── index.html
 └── assets/
     ├── index-*.js
     └── index-*.css
+
+/opt/assembly_visual/logs/ ← Логи Java приложения
+/var/log/readlog/          ← Логи сервиса ReadLog
 ```
 
 ---
@@ -319,6 +343,7 @@ sudo dnf install --disablerepo='*' /path/to/nodejs.rpm
 1. Проверьте логи: `sudo journalctl -u httpd -f`
 2. Проверьте SELinux: `sudo ausearch -m AVC -ts recent`
 3. Проверьте firewall: `sudo firewall-cmd --list-all`
+4. Проверьте API: `sudo journalctl -u readlog -f`
 
 ---
 

@@ -311,11 +311,22 @@ app.get('/api/info', (req, res) => {
 });
 
 // Раздача статических файлов (фронтенд)
-app.use(express.static(path.join(__dirname, '../dist')));
+// Веб-файлы размещаются в стандартной директории Apache: /var/www/html/readlog/
+const WEB_DIR = '/var/www/html/readlog';
+if (fs.existsSync(WEB_DIR)) {
+  app.use(express.static(WEB_DIR));
+} else {
+  // Fallback: если веб-файлы в dist/ рядом с сервером
+  app.use(express.static(path.join(__dirname, '../dist')));
+}
 
 // Все остальные запросы -> index.html (SPA)
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
+  if (fs.existsSync(path.join(WEB_DIR, 'index.html'))) {
+    res.sendFile(path.join(WEB_DIR, 'index.html'));
+  } else {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  }
 });
 
 // Обработка ошибок

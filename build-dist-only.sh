@@ -50,7 +50,7 @@ cp apache-logviewer.conf "$PACKAGE_NAME/" 2>/dev/null || echo -e "${YELLOW}⚠ a
 # Создаём простой скрипт установки
 cat > "$PACKAGE_NAME/install.sh" << 'EOF'
 #!/bin/bash
-# Установка ReadLog — только статические файлы через Apache
+# Установка ReadLog — статические файлы в стандартную директорию Apache
 
 set -e
 
@@ -59,9 +59,11 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-WEB_DIR="/opt/readlog/www"
+# Стандартная директория Apache
+WEB_DIR="/var/www/html/readlog"
 
 echo "Установка ReadLog..."
+echo "  Файлы будут размещены в: $WEB_DIR"
 
 # Создаём директорию
 mkdir -p "$WEB_DIR"
@@ -93,10 +95,10 @@ systemctl restart httpd
 
 echo ""
 echo "✓ Установка завершена!"
-echo "✓ Сайт доступен на: http://$(hostname -I | awk '{print $1}')/"
 echo ""
 echo "Файлы размещены в: $WEB_DIR"
 echo "Конфиг Apache: /etc/httpd/conf.d/readlog.conf"
+echo "Сайт доступен на: http://$(hostname -I | awk '{print $1}')/readlog/"
 EOF
 
 chmod +x "$PACKAGE_NAME/install.sh"
@@ -122,4 +124,4 @@ echo ""
 echo "Требования на сервере:"
 echo "  - Apache 2.4+"
 echo "  - Node.js НЕ требуется"
-echo "  - Файлы будут размещены в /opt/readlog/www/"
+echo "  - Файлы будут размещены в /var/www/html/readlog/"

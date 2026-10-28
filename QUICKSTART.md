@@ -1,6 +1,6 @@
 # ReadLog — Быстрый старт
 
-## Установка в /opt/readlog
+## Установка
 
 ### Самый быстрый способ (3 команды)
 
@@ -25,33 +25,34 @@ cd readlog-dist-*
 sudo ./install.sh
 ```
 
-**Всё!** Файлы размещены в `/opt/readlog/www/`
+**Всё!** Файлы размещены в `/var/www/html/readlog/`
 
 ---
 
 ## Структура установки
 
 ```
-/opt/readlog/
-├── www/                    ← Статические файлы для Apache
-│   ├── index.html
-│   └── assets/
-│       ├── index-*.js
-│       └── index-*.css
-├── server.js               ← Node.js сервер (если полная установка)
-├── config.json             ← Конфигурация
-└── node_modules/           ← Зависимости (если полная установка)
+/opt/readlog/                      ← Приложение (если полная установка)
+├── server.js                      ← Node.js сервер
+├── config.json                    ← Конфигурация
+└── node_modules/                  ← Зависимости
 
-/opt/assembly_visual/logs/  ← Логи Java приложения (источник данных)
-/var/log/readlog/           ← Логи сервиса ReadLog
+/var/www/html/readlog/             ← Статические файлы (стандартная директория Apache)
+├── index.html
+└── assets/
+    ├── index-*.js
+    └── index-*.css
+
+/opt/assembly_visual/logs/         ← Логи Java приложения (источник данных)
+/var/log/readlog/                  ← Логи сервиса ReadLog
 ```
 
 ---
 
 ## Что делает install.sh
 
-1. Создаёт директорию `/opt/readlog/www/`
-2. Копирует файлы из `dist/` в `/opt/readlog/www/`
+1. Создаёт директорию `/var/www/html/readlog/`
+2. Копирует файлы из `dist/` в `/var/www/html/readlog/`
 3. Копирует конфиг Apache в `/etc/httpd/conf.d/readlog.conf`
 4. Настраивает права и SELinux
 5. Открывает порт в firewall
@@ -124,11 +125,16 @@ sudo nano /opt/readlog/config.json
 ## Управление сервисом
 
 ```bash
+# API сервер (если установлен)
 sudo systemctl start readlog       # Запуск
 sudo systemctl stop readlog        # Остановка
 sudo systemctl restart readlog     # Перезапуск
 sudo systemctl status readlog      # Статус
 sudo journalctl -u readlog -f      # Логи
+
+# Apache
+sudo systemctl start httpd
+sudo systemctl restart httpd
 ```
 
 ---
@@ -136,14 +142,17 @@ sudo journalctl -u readlog -f      # Логи
 ## Проверка
 
 ```bash
-# Проверить файлы
-ls -la /opt/readlog/www/
+# Проверить веб-файлы
+ls -la /var/www/html/readlog/
 
 # Проверить API (если сервер установлен)
 curl http://localhost:3001/api/info
 
 # Проверить логи
 sudo tail -f /var/log/readlog/server.log
+
+# Открыть в браузере
+# http://server-ip/readlog/
 ```
 
 ---
@@ -151,6 +160,7 @@ sudo tail -f /var/log/readlog/server.log
 ## Полезные ссылки
 
 - Полная документация: `README-OFFLINE.md`
+- Структура установки: `INSTALL-STRUCTURE.md`
 - Настройка безопасности: `SECURITY-CONFIG.md`
 - Настройка сервера: `SERVER-SETUP.md`
 - Функции экспорта: `EXPORT-GUIDE.md`
