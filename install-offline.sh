@@ -75,6 +75,7 @@ echo -e "${GREEN}✓ Директории созданы${NC}"
 # 4. Установка приложения
 echo -e "${YELLOW}[4/8] Установка приложения...${NC}"
 # Копируем всё через tar с исключениями (не требует rsync)
+# ВАЖНО: node_modules НЕ исключаем - они нужны для оффлайн работы
 tar -cf - \
     --exclude='*.tar.gz' \
     --exclude='.git' \
@@ -85,6 +86,26 @@ tar -cf - \
     --exclude='npm-cache' \
     --exclude='offline-packages' \
     -C ./ . | tar -xf - -C "$APP_DIR/"
+
+# Копируем server.js и package.json из server/ в корень для удобства
+if [ -f "$APP_DIR/server/server.js" ] && [ ! -f "$APP_DIR/server.js" ]; then
+    cp "$APP_DIR/server/server.js" "$APP_DIR/server.js"
+    cp "$APP_DIR/server/package.json" "$APP_DIR/package.json"
+    echo -e "${GREEN}✓ server.js скопирован в корень${NC}"
+fi
+
+# Копируем config.json из server/ в корень если нужно
+if [ -f "$APP_DIR/server/config.json" ] && [ ! -f "$APP_DIR/config.json" ]; then
+    cp "$APP_DIR/server/config.json" "$APP_DIR/config.json"
+    echo -e "${GREEN}✓ config.json скопирован в корень${NC}"
+fi
+
+# Копируем node_modules из server/ в корень если они там и в корне их нет
+if [ -d "$APP_DIR/server/node_modules" ] && [ ! -d "$APP_DIR/node_modules" ]; then
+    mv "$APP_DIR/server/node_modules" "$APP_DIR/node_modules"
+    echo -e "${GREEN}✓ node_modules перемещены из server/ в корень${NC}"
+fi
+
 chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR"
 chmod -R 755 "$APP_DIR"
 chmod 600 "$APP_DIR/config.json" 2>/dev/null || true
@@ -94,23 +115,47 @@ echo -e "${GREEN}Приложение установлено в $APP_DIR${NC}"
 echo -e "${YELLOW}[5/8] Установка npm-зависимостей (оффлайн)...${NC}"
 cd "$APP_DIR"
 
-if [ -d "node_modules" ]; then
-    echo -e "${GREEN}node_modules уже присутствуют в пакете${NC}"
-elif [ -d "npm-cache" ]; then
-    echo "Используем локальный npm-кэш..."
-    export npm_config_cache="$APP_DIR/npm-cache"
-    npm ci --offline --prefer-offline 2>/dev/null || npm install --offline --prefer-offline
-elif [ -d "offline-packages" ] && ls offline-packages/*.tgz 1>/dev/null 2>&1; then
-    echo "Устанавливаем из локальных пакетов..."
-    npm install offline-packages/*.tgz --offline --ignore-scripts 2>/dev/null || true
-else
-    echo -e "${YELLOW}Попытка установки из кэша npm...${NC}"
-    npm ci --offline 2>/dev/null || npm install --offline 2>/dev/null || {
-        echo -e "${YELLOW}Оффлайн-установка не удалась, пробуем online...${NC}"
-        npm ci 2>/dev/null || npm install
-    }
+# Копируем config.json из server/ в корень если нужно
+if [ -f "$APP_DIR/server/config.json" ] && [ ! -f "$APP_DIR/config.json" ]; then
+    cp "$APP_DIR/server/config.json" "$APP_DIR/config.json"
+    echo -e "${GREEN}✓ config.json скопирован в корень${NC}"
 fi
-echo -e "${GREEN}Зависимости установлены${NC}"
+
+# Проверяем, есть ли node_modules с содержимым
+if [ -d "node_modules" ] && [ "$(ls -A node_modules 2>/dev/null)" ]; then
+    echo -e "${GREEN}✓ node_modules уже присутствуют в пакете ($(ls node_modules | wc -l) пакетов)${NC}"
+else
+    echo -e "${YELLOW}node_modules не найдены, пытаемся установить...${NC}"
+    
+    # Пробуем разные способы установки
+    if [ -d "npm-cache" ] && [ "$(ls -A npm-cache 2>/dev/null)" ]; then
+        echo "Используем локальный npm-кэш..."
+        export npm_config_cache="$APP_DIR/npm-cache"
+        npm install --offline --prefer-offline 2>/dev/null || true
+    fi
+    
+    if [ -d "offline-packages" ] && ls offline-packages/*.tgz 1>/dev/null 2>&1; then
+        echo "Устанавливаем из локальных пакетов..."
+        npm install offline-packages/*.tgz --ignore-scripts 2>/dev/null || true
+    fi
+    
+    # Если node_modules всё ещё нет, пробуем online
+    if [ ! -d "node_modules" ] || [ ! "$(ls -A node_modules 2>/dev/null)" ]; then
+        echo -e "${YELLOW}Попытка установки через npm (требуется интернет)...${NC}"
+        npm install 2>/dev/null || {
+            echo -e "${RED}✗ Не удалось установить зависимости автоматически${NC}"
+            echo -e "${YELLOW}Установите вручную: cd $APP_DIR && npm install${NC}"
+        }
+    fi
+fi
+
+# Исправляем права на node_modules
+if [ -d "node_modules" ]; then
+    chown -R "$SERVICE_USER:$SERVICE_USER" node_modules
+    echo -e "${GREEN}Зависимости установлены${NC}"
+else
+    echo -e "${RED}ВНИМАНИЕ: node_modules не найден!${NC}"
+fi
 
 # 6. Сборка (если нужно)
 echo -e "${YELLOW}[6/8] Сборка production-версии...${NC}"

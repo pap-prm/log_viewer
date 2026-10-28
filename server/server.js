@@ -6,7 +6,14 @@ const morgan = require('morgan');
 const ipRangeCheck = require('ip-range-check');
 
 // Загрузка конфигурации
-const configPath = path.join(__dirname, 'config.json');
+// Ищем config.json сначала в текущей директории, потом в server/
+let configPath = path.join(__dirname, 'config.json');
+if (!fs.existsSync(configPath)) {
+  configPath = path.join(__dirname, 'server', 'config.json');
+}
+if (!fs.existsSync(configPath)) {
+  configPath = path.join(__dirname, '..', 'config.json');
+}
 let config;
 
 try {
@@ -314,19 +321,39 @@ app.get('/api/info', (req, res) => {
 // Веб-файлы размещаются в стандартной директории Apache: /var/www/html/readlog/
 const WEB_DIR = '/var/www/html/readlog';
 if (fs.existsSync(WEB_DIR)) {
+  app.use('/readlog', express.static(WEB_DIR));
   app.use(express.static(WEB_DIR));
-} else {
-  // Fallback: если веб-файлы в dist/ рядом с сервером
-  app.use(express.static(path.join(__dirname, '../dist')));
+}
+
+// Fallback: если веб-файлы в dist/ рядом с сервером
+const distPaths = [
+  path.join(__dirname, 'dist'),
+  path.join(__dirname, '../dist'),
+  path.join(__dirname, '..', 'dist')
+];
+
+for (const distPath of distPaths) {
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    break;
+  }
 }
 
 // Все остальные запросы -> index.html (SPA)
 app.get('*', (req, res) => {
-  if (fs.existsSync(path.join(WEB_DIR, 'index.html'))) {
-    res.sendFile(path.join(WEB_DIR, 'index.html'));
-  } else {
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  // Приоритет: Apache директория > dist/ рядом с сервером
+  const indexPaths = [
+    path.join(WEB_DIR, 'index.html'),
+    ...distPaths.map(p => path.join(p, 'index.html'))
+  ];
+  
+  for (const indexPath of indexPaths) {
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
   }
+  
+  res.status(404).json({ error: 'index.html not found' });
 });
 
 // Обработка ошибок
