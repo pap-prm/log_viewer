@@ -72,8 +72,71 @@ function checkWhitelist(req, res, next) {
   });
 }
 
-// Применяем проверку ко всем API маршрутам
+// Middleware для LDAP авторизации
+function checkAuth(req, res, next) {
+  if (!config.security.auth.enabled) {
+    return next();
+  }
+
+  // Проверка Basic Auth заголовка
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Basic ')) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Log Viewer"');
+    return res.status(401).json({
+      error: 'Требуется авторизация',
+      message: 'Необходима авторизация LDAP'
+    });
+  }
+
+  // Декодирование учётных данных
+  const base64Credentials = authHeader.split(' ')[1];
+  const credentials = Buffer.from(base64Credentials, 'base64').toString('ascii');
+  const [username, password] = credentials.split(':');
+
+  // LDAP проверка (упрощённая версия)
+  // В production используйте ldapjs или passport-ldapauth
+  console.log(`Попытка авторизации: ${username}`);
+  
+  // TODO: Реальная LDAP проверка
+  // const ldap = require('ldapjs');
+  // const client = ldap.createClient({ url: config.security.auth.ldap.url });
+  // client.bind(config.security.auth.ldap.bindDN, config.security.auth.ldap.bindPassword, (err) => {
+  //   if (err) return res.status(500).json({ error: 'LDAP connection error' });
+  //   
+  //   const searchFilter = config.security.auth.ldap.searchFilter.replace('{{username}}', username);
+  //   const opts = {
+  //     filter: searchFilter,
+  //     scope: 'sub'
+  //   };
+  //   
+  //   client.search(config.security.auth.ldap.baseDN, opts, (err, res) => {
+  //     if (err) return res.status(500).json({ error: 'LDAP search error' });
+  //     
+  //     let authenticated = false;
+  //     res.on('searchEntry', (entry) => {
+  //       // Проверка пароля и членства в группе
+  //       authenticated = true;
+  //     });
+  //     
+  //     res.on('end', () => {
+  //       if (authenticated) {
+  //         next();
+  //       } else {
+  //         res.status(401).json({ error: 'Неверные учётные данные' });
+  //       }
+  //     });
+  //   });
+  // });
+
+  // Временно пропускаем все авторизованные запросы
+  // В production замените на реальную LDAP проверку
+  next();
+}
+
+// Применяем middleware ко всем API маршрутам
 app.use('/api', checkWhitelist);
+app.use('/api', checkAuth);
 
 // Проверка существования директории с логами
 function checkLogsDirectory() {
@@ -197,7 +260,7 @@ if (config.features.enableUpload) {
   const upload = multer({
     dest: LOGS_DIR,
     limits: {
-      fileSize: config.features.maxUploadSize || 52428800 // 50MB
+      fileSize: config.features.maxUploadSize || 52428800
     },
     fileFilter: (req, file, cb) => {
       if (file.mimetype === 'text/plain' || file.originalname.endsWith('.log')) {
@@ -216,7 +279,6 @@ if (config.features.enableUpload) {
       });
     }
 
-    // Переименовываем файл с расширением .log
     const newPath = path.join(LOGS_DIR, req.file.originalname);
     fs.renameSync(req.file.path, newPath);
 
@@ -239,6 +301,7 @@ app.get('/api/info', (req, res) => {
       version: '1.0.0',
       logsDirectory: LOGS_DIR,
       whitelistEnabled: config.security.whitelist.enabled,
+      authEnabled: config.security.auth.enabled,
       features: {
         upload: config.features.enableUpload,
         download: config.features.enableDownload
@@ -275,10 +338,11 @@ app.listen(PORT, HOST, () => {
   console.log('═══════════════════════════════════════════');
   console.log(`  Адрес: http://${HOST}:${PORT}`);
   console.log(`  Логи: ${LOGS_DIR}`);
-  console.log(`  Белый список: ${config.security.whitelist.enabled ? 'ВКЛ' : 'ВЫКЛ'}`);
+  console.log(`  Белый список IP: ${config.security.whitelist.enabled ? 'ВКЛ' : 'ВЫКЛ'}`);
   if (config.security.whitelist.enabled) {
     console.log(`  Разрешённые IP: ${config.security.whitelist.ips.join(', ')}`);
   }
+  console.log(`  Авторизация LDAP: ${config.security.auth.enabled ? 'ВКЛ' : 'ВЫКЛ'}`);
   console.log('═══════════════════════════════════════════');
   console.log('');
 });

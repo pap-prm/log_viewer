@@ -17,8 +17,20 @@
         "::1",
         "192.168.1.0/24",
         "10.0.0.0/8"
-      ],
-      "domains": []
+      ]
+    },
+    "auth": {
+      "enabled": false,
+      "type": "ldap",
+      "ldap": {
+        "url": "ldaps://dc01.company.local:636",
+        "baseDN": "DC=company,DC=local",
+        "bindDN": "CN=ldap_bind,OU=Service,DC=company,DC=local",
+        "bindPassword": "PasswordOfBindUser",
+        "searchFilter": "(sAMAccountName={{username}})",
+        "groupDN": "CN=LogViewers,OU=Groups,DC=company,DC=local",
+        "groupAttribute": "member"
+      }
     },
     "cors": {
       "enabled": true,
