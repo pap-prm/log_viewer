@@ -10,7 +10,29 @@ echo "=== Создание минимального пакета (только d
 # Цвета
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m'
+
+# Проверка Node.js
+if ! command -v node &> /dev/null; then
+    echo -e "${RED}Ошибка: Node.js не установлен!${NC}"
+    echo "Установите Node.js 18+:"
+    echo "  curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -"
+    echo "  sudo dnf install -y nodejs"
+    exit 1
+fi
+
+echo -e "${YELLOW}Node.js версия: $(node --version)${NC}"
+echo -e "${YELLOW}npm версия: $(npm --version)${NC}"
+echo ""
+
+# Проверка наличия node_modules
+if [ ! -d "node_modules" ] || [ ! -f "node_modules/.bin/vite" ]; then
+    echo -e "${YELLOW}Зависимости не установлены. Выполняю npm install...${NC}"
+    npm install
+    echo -e "${GREEN}✓ Зависимости установлены${NC}"
+    echo ""
+fi
 
 # Собираем проект
 echo -e "${YELLOW}Сборка production-версии...${NC}"
@@ -23,7 +45,7 @@ mkdir -p "$PACKAGE_NAME"
 # Копируем только необходимое
 echo -e "${YELLOW}Копирование файлов...${NC}"
 cp -r dist "$PACKAGE_NAME/"
-cp apache-logviewer.conf "$PACKAGE_NAME/"
+cp apache-logviewer.conf "$PACKAGE_NAME/" 2>/dev/null || echo -e "${YELLOW}⚠ apache-logviewer.conf не найден${NC}"
 
 # Создаём простой скрипт установки
 cat > "$PACKAGE_NAME/install.sh" << 'EOF'
@@ -46,7 +68,9 @@ mkdir -p "$WEB_DIR"
 
 # Копируем файлы
 cp -r dist/* "$WEB_DIR/"
-cp apache-logviewer.conf /etc/httpd/conf.d/logviewer.conf
+if [ -f "apache-logviewer.conf" ]; then
+    cp apache-logviewer.conf /etc/httpd/conf.d/logviewer.conf
+fi
 
 # Настраиваем права
 chown -R root:apache "$WEB_DIR"
