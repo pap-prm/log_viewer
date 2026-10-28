@@ -4,7 +4,7 @@
 
 set -e
 
-echo "=== Подготовка оффлайн-пакета Log Viewer ==="
+echo "=== Подготовка оффлайн-пакета ReadLog ==="
 
 # Цвета
 GREEN='\033[0;32m'
@@ -26,14 +26,14 @@ echo -e "${YELLOW}npm версия: $(npm --version)${NC}"
 echo ""
 
 # Создаём директорию для пакета
-PACKAGE_DIR="log-viewer-offline-$(date +%Y%m%d)"
+PACKAGE_DIR="readlog-offline-$(date +%Y%m%d)"
 mkdir -p "$PACKAGE_DIR"
 
 echo -e "${YELLOW}[1/6] Копирование исходного кода...${NC}"
 # Копируем все файлы проекта, кроме node_modules и dist
 rsync -av --exclude='node_modules' --exclude='dist' --exclude='.git' \
     --exclude='*.sh' --exclude='offline-packages' --exclude='npm-cache' \
-    --exclude='log-viewer-offline-*' \
+    --exclude='readlog-offline-*' --exclude='log-viewer-offline-*' \
     ./ "$PACKAGE_DIR/"
 
 echo -e "${YELLOW}[2/6] Установка зависимостей...${NC}"
@@ -85,3 +85,5 @@ echo "1. Скопируйте ${PACKAGE_DIR}.tar.gz на сервер"
 echo "2. Распакуйте: tar -xzf ${PACKAGE_DIR}.tar.gz"
 echo "3. Перейдите в папку: cd ${PACKAGE_DIR}"
 echo "4. Запустите: sudo ./install-offline.sh"
+echo ""
+echo "Приложение будет установлено в: /opt/readlog"
