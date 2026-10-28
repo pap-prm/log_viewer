@@ -74,11 +74,17 @@ echo -e "${GREEN}✓ Директории созданы${NC}"
 
 # 4. Установка приложения
 echo -e "${YELLOW}[4/8] Установка приложения...${NC}"
-# Копируем всё кроме архивов и временных файлов
-rsync -a --exclude='*.tar.gz' --exclude='.git' \
-    --exclude='install-offline.sh' --exclude='prepare-offline.sh' \
-    --exclude='build-dist-only.sh' --exclude='install-server.sh' \
-    ./ "$APP_DIR/"
+# Копируем всё через tar с исключениями (не требует rsync)
+tar -cf - \
+    --exclude='*.tar.gz' \
+    --exclude='.git' \
+    --exclude='install-offline.sh' \
+    --exclude='prepare-offline.sh' \
+    --exclude='build-dist-only.sh' \
+    --exclude='install-server.sh' \
+    --exclude='npm-cache' \
+    --exclude='offline-packages' \
+    -C ./ . | tar -xf - -C "$APP_DIR/"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR"
 chmod -R 755 "$APP_DIR"
 chmod 600 "$APP_DIR/config.json" 2>/dev/null || true
