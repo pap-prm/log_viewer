@@ -1,8 +1,10 @@
-# Быстрый старт — Оффлайн установка Log Viewer
+# ReadLog — Быстрый старт
 
-## Самый быстрый способ (3 команды)
+## Установка в /opt/readlog
 
-### На машине с интернетом:
+### Самый быстрый способ (3 команды)
+
+#### На машине с интернетом:
 
 ```bash
 # 1. Собрать пакет
@@ -10,30 +12,50 @@ chmod +x build-dist-only.sh
 ./build-dist-only.sh
 
 # 2. Передать на сервер
-scp log-viewer-dist-*.tar.gz user@server:/tmp/
+scp readlog-dist-*.tar.gz user@server:/tmp/
 ```
 
-### На сервере РЕД ОС:
+#### На сервере РЕД ОС:
 
 ```bash
 # 3. Установить
 cd /tmp
-tar -xzf log-viewer-dist-*.tar.gz
-cd log-viewer-dist-*
+tar -xzf readlog-dist-*.tar.gz
+cd readlog-dist-*
 sudo ./install.sh
 ```
 
-**Всё!** Сайт доступен на `http://server-ip/`
+**Всё!** Файлы размещены в `/opt/readlog/www/`
 
 ---
 
-## Что делает скрипт install.sh
+## Структура установки
 
-1. Копирует файлы в `/var/www/logviewer`
-2. Настраивает Apache конфиг
-3. Настраивает SELinux
-4. Открывает порт в firewall
-5. Перезапускает Apache
+```
+/opt/readlog/
+├── www/                    ← Статические файлы для Apache
+│   ├── index.html
+│   └── assets/
+│       ├── index-*.js
+│       └── index-*.css
+├── server.js               ← Node.js сервер (если полная установка)
+├── config.json             ← Конфигурация
+└── node_modules/           ← Зависимости (если полная установка)
+
+/opt/assembly_visual/logs/  ← Логи Java приложения (источник данных)
+/var/log/readlog/           ← Логи сервиса ReadLog
+```
+
+---
+
+## Что делает install.sh
+
+1. Создаёт директорию `/opt/readlog/www/`
+2. Копирует файлы из `dist/` в `/opt/readlog/www/`
+3. Копирует конфиг Apache в `/etc/httpd/conf.d/readlog.conf`
+4. Настраивает права и SELinux
+5. Открывает порт в firewall
+6. Перезапускает Apache
 
 ---
 
@@ -41,63 +63,11 @@ sudo ./install.sh
 
 - РЕД ОС 8.0.3
 - Apache 2.4+ (`sudo dnf install httpd`)
-- **Node.js НЕ нужен** (это только статический сайт)
+- **Node.js НЕ нужен** (для минимальной установки)
 
 ---
 
-## Если нужна AD-авторизация
-
-После установки отредактируйте `/etc/httpd/conf.d/logviewer.conf`:
-
-```bash
-sudo nano /etc/httpd/conf.d/logviewer.conf
-```
-
-Раскомментируйте секцию HTTPS + LDAP и укажите:
-- Адрес AD сервера
-- DN для привязки
-- Пароль в файле `/etc/httpd/conf/ldap_bind_password`
-- Имя группы AD для доступа
-
-Затем:
-```bash
-sudo systemctl restart httpd
-```
-
----
-
-## Проверка
-
-```bash
-# Статус Apache
-sudo systemctl status httpd
-
-# Логи
-sudo tail -f /var/log/httpd/error_log
-
-# Файлы сайта
-ls -la /var/www/logviewer/
-```
-
----
-
-## Обновление
-
-```bash
-# На машине с интернетом — пересобрать
-npm run build
-tar -czf update.tar.gz dist/
-
-# На сервере — обновить
-sudo cp -r dist/* /var/www/logviewer/
-sudo systemctl restart httpd
-```
-
----
-
-## Полная установка (с возможностью пересборки)
-
-Если нужна возможность пересобирать на сервере:
+## Если нужна серверная часть (с API и whitelist)
 
 ```bash
 # На машине с интернетом
@@ -105,8 +75,8 @@ chmod +x prepare-offline.sh
 ./prepare-offline.sh
 
 # На сервере
-tar -xzf log-viewer-offline-*.tar.gz
-cd log-viewer-offline-*
+tar -xzf readlog-offline-*.tar.gz
+cd readlog-offline-*
 sudo ./install-offline.sh
 ```
 
@@ -114,8 +84,73 @@ sudo ./install-offline.sh
 
 ---
 
+## Конфигурация
+
+После установки отредактируйте `/opt/readlog/config.json`:
+
+```bash
+sudo nano /opt/readlog/config.json
+```
+
+### Настройка пути к логам
+
+```json
+{
+  "logs": {
+    "directory": "/opt/assembly_visual/logs/"
+  }
+}
+```
+
+### Настройка белого списка IP
+
+```json
+{
+  "security": {
+    "whitelist": {
+      "enabled": true,
+      "ips": [
+        "127.0.0.1",
+        "192.168.1.0/24",
+        "10.0.0.0/8"
+      ]
+    }
+  }
+}
+```
+
+---
+
+## Управление сервисом
+
+```bash
+sudo systemctl start readlog       # Запуск
+sudo systemctl stop readlog        # Остановка
+sudo systemctl restart readlog     # Перезапуск
+sudo systemctl status readlog      # Статус
+sudo journalctl -u readlog -f      # Логи
+```
+
+---
+
+## Проверка
+
+```bash
+# Проверить файлы
+ls -la /opt/readlog/www/
+
+# Проверить API (если сервер установлен)
+curl http://localhost:3001/api/info
+
+# Проверить логи
+sudo tail -f /var/log/readlog/server.log
+```
+
+---
+
 ## Полезные ссылки
 
 - Полная документация: `README-OFFLINE.md`
-- Конфиг Apache: `apache-logviewer.conf`
-- Исходный код: `/opt/log-viewer/` (после полной установки)
+- Настройка безопасности: `SECURITY-CONFIG.md`
+- Настройка сервера: `SERVER-SETUP.md`
+- Функции экспорта: `EXPORT-GUIDE.md`

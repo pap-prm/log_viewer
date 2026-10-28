@@ -38,6 +38,9 @@ scp -r server/ dist/ install-server.sh user@server:/tmp/
 cd /tmp
 chmod +x install-server.sh
 sudo ./install-server.sh
+
+# Приложение будет установлено в /opt/readlog
+# Логи сервиса: /var/log/readlog/
 ```
 
 ## Конфигурация безопасности

@@ -5,7 +5,7 @@
 
 set -e
 
-echo "=== Создание минимального пакета (только dist/) ==="
+echo "=== Создание минимального пакета ReadLog (только dist/) ==="
 
 # Цвета
 GREEN='\033[0;32m'
@@ -39,7 +39,7 @@ echo -e "${YELLOW}Сборка production-версии...${NC}"
 npm run build
 
 # Создаём директорию для пакета
-PACKAGE_NAME="log-viewer-dist-$(date +%Y%m%d)"
+PACKAGE_NAME="readlog-dist-$(date +%Y%m%d)"
 mkdir -p "$PACKAGE_NAME"
 
 # Копируем только необходимое
@@ -50,7 +50,7 @@ cp apache-logviewer.conf "$PACKAGE_NAME/" 2>/dev/null || echo -e "${YELLOW}⚠ a
 # Создаём простой скрипт установки
 cat > "$PACKAGE_NAME/install.sh" << 'EOF'
 #!/bin/bash
-# Простая установка только статических файлов
+# Установка ReadLog — только статические файлы через Apache
 
 set -e
 
@@ -59,9 +59,9 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-WEB_DIR="/var/www/logviewer"
+WEB_DIR="/opt/readlog/www"
 
-echo "Установка Log Viewer..."
+echo "Установка ReadLog..."
 
 # Создаём директорию
 mkdir -p "$WEB_DIR"
@@ -69,7 +69,7 @@ mkdir -p "$WEB_DIR"
 # Копируем файлы
 cp -r dist/* "$WEB_DIR/"
 if [ -f "apache-logviewer.conf" ]; then
-    cp apache-logviewer.conf /etc/httpd/conf.d/logviewer.conf
+    cp apache-logviewer.conf /etc/httpd/conf.d/readlog.conf
 fi
 
 # Настраиваем права
@@ -95,8 +95,8 @@ echo ""
 echo "✓ Установка завершена!"
 echo "✓ Сайт доступен на: http://$(hostname -I | awk '{print $1}')/"
 echo ""
-echo "Для настройки AD-авторизации отредактируйте:"
-echo "  /etc/httpd/conf.d/logviewer.conf"
+echo "Файлы размещены в: $WEB_DIR"
+echo "Конфиг Apache: /etc/httpd/conf.d/readlog.conf"
 EOF
 
 chmod +x "$PACKAGE_NAME/install.sh"
@@ -122,3 +122,4 @@ echo ""
 echo "Требования на сервере:"
 echo "  - Apache 2.4+"
 echo "  - Node.js НЕ требуется"
+echo "  - Файлы будут размещены в /opt/readlog/www/"
