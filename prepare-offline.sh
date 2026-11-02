@@ -36,6 +36,7 @@ rsync -av --exclude='dist' --exclude='.git' \
     --exclude='prepare-offline.sh' --exclude='build-dist-only.sh' \
     --exclude='install-server.sh' \
     --exclude='offline-packages' --exclude='npm-cache' \
+    --exclude='server-deps' \
     --exclude='readlog-offline-*' --exclude='log-viewer-offline-*' \
     --exclude='readlog-dist-*' --exclude='log-viewer-dist-*' \
     ./ "$PACKAGE_DIR/"
@@ -80,6 +81,15 @@ if [ -f "server/server.js" ]; then
     cp server/config.json config.json 2>/dev/null || true
     echo "✓ server.js, package.json, config.json скопированы в корень"
 fi
+
+# Устанавливаем серверные зависимости в отдельную папку
+echo -e "${YELLOW}Установка серверных зависимостей...${NC}"
+mkdir -p server-deps
+cd server-deps
+cp ../server/package.json ./
+npm install --production 2>/dev/null || npm install
+cd ..
+echo "✓ Серверные зависимости установлены в server-deps/"
 
 echo -e "${YELLOW}[6/6] Создание архива...${NC}"
 cd ..
