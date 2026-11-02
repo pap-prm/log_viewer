@@ -124,6 +124,17 @@ fi
 # Проверяем, есть ли node_modules с содержимым
 if [ -d "node_modules" ] && [ "$(ls -A node_modules 2>/dev/null)" ]; then
     echo -e "${GREEN}✓ node_modules уже присутствуют в пакете ($(ls node_modules | wc -l) пакетов)${NC}"
+    
+    # Проверяем наличие серверных зависимостей
+    if [ ! -d "node_modules/express" ]; then
+        echo -e "${YELLOW}Серверные зависимости (express) не найдены, устанавливаем...${NC}"
+        npm install express cors morgan ip-range-check multer --save 2>/dev/null || {
+            echo -e "${RED}✗ Не удалось установить серверные зависимости${NC}"
+            echo -e "${YELLOW}Установите вручную: cd $APP_DIR && npm install express cors morgan ip-range-check multer${NC}"
+        }
+    else
+        echo -e "${GREEN}✓ Серверные зависимости найдены${NC}"
+    fi
 else
     echo -e "${YELLOW}node_modules не найдены, пытаемся установить...${NC}"
     
@@ -146,6 +157,12 @@ else
             echo -e "${RED}✗ Не удалось установить зависимости автоматически${NC}"
             echo -e "${YELLOW}Установите вручную: cd $APP_DIR && npm install${NC}"
         }
+    fi
+    
+    # Устанавливаем серверные зависимости
+    if [ ! -d "node_modules/express" ]; then
+        echo -e "${YELLOW}Установка серверных зависимостей...${NC}"
+        npm install express cors morgan ip-range-check multer --save 2>/dev/null || true
     fi
 fi
 
