@@ -75,7 +75,7 @@ echo -e "${GREEN}✓ Директории созданы${NC}"
 # 4. Установка приложения
 echo -e "${YELLOW}[4/8] Установка приложения...${NC}"
 # Копируем всё через tar с исключениями (не требует rsync)
-# ВАЖНО: node_modules НЕ исключаем - они нужны для оффлайн работы
+# ВАЖНО: node_modules и server-deps НЕ исключаем - они нужны для оффлайн работы
 tar -cf - \
     --exclude='*.tar.gz' \
     --exclude='.git' \
@@ -124,46 +124,38 @@ fi
 # Проверяем, есть ли node_modules с содержимым
 if [ -d "node_modules" ] && [ "$(ls -A node_modules 2>/dev/null)" ]; then
     echo -e "${GREEN}✓ node_modules уже присутствуют в пакете ($(ls node_modules | wc -l) пакетов)${NC}"
+else
+    echo -e "${YELLOW}node_modules не найдены${NC}"
+fi
+
+# Проверяем наличие серверных зависимостей (express)
+if [ ! -d "node_modules/express" ]; then
+    echo -e "${YELLOW}Серверные зависимости (express) не найдены${NC}"
     
-    # Проверяем наличие серверных зависимостей
-    if [ ! -d "node_modules/express" ]; then
-        echo -e "${YELLOW}Серверные зависимости (express) не найдены, устанавливаем...${NC}"
-        npm install express cors morgan ip-range-check multer --save 2>/dev/null || {
-            echo -e "${RED}✗ Не удалось установить серверные зависимости${NC}"
-            echo -e "${YELLOW}Установите вручную: cd $APP_DIR && npm install express cors morgan ip-range-check multer${NC}"
+    # Пробуем скопировать из server-deps/ (если есть в пакете)
+    if [ -d "server-deps/node_modules" ]; then
+        echo -e "${YELLOW}Копируем серверные зависимости из server-deps/...${NC}"
+        cp -r server-deps/node_modules/* node_modules/ 2>/dev/null || {
+            mkdir -p node_modules
+            cp -r server-deps/node_modules/* node_modules/
         }
+        echo -e "${GREEN}✓ Серверные зависимости скопированы${NC}"
+    # Пробуем из offline-packages/
+    elif [ -d "offline-packages" ] && ls offline-packages/express-*.tgz 1>/dev/null 2>&1; then
+        echo -e "${YELLOW}Устанавливаем серверные зависимости из offline-packages/...${NC}"
+        npm install offline-packages/express-*.tgz \
+                    offline-packages/cors-*.tgz \
+                    offline-packages/morgan-*.tgz \
+                    offline-packages/ip-range-check-*.tgz \
+                    offline-packages/multer-*.tgz \
+                    --save --ignore-scripts 2>/dev/null || true
     else
-        echo -e "${GREEN}✓ Серверные зависимости найдены${NC}"
+        echo -e "${RED}✗ Серверные зависимости не найдены в пакете${NC}"
+        echo -e "${YELLOW}Необходимо пересобрать пакет на машине с интернетом${NC}"
+        echo -e "${YELLOW}Или установить вручную: cd $APP_DIR && npm install express cors morgan ip-range-check multer${NC}"
     fi
 else
-    echo -e "${YELLOW}node_modules не найдены, пытаемся установить...${NC}"
-    
-    # Пробуем разные способы установки
-    if [ -d "npm-cache" ] && [ "$(ls -A npm-cache 2>/dev/null)" ]; then
-        echo "Используем локальный npm-кэш..."
-        export npm_config_cache="$APP_DIR/npm-cache"
-        npm install --offline --prefer-offline 2>/dev/null || true
-    fi
-    
-    if [ -d "offline-packages" ] && ls offline-packages/*.tgz 1>/dev/null 2>&1; then
-        echo "Устанавливаем из локальных пакетов..."
-        npm install offline-packages/*.tgz --ignore-scripts 2>/dev/null || true
-    fi
-    
-    # Если node_modules всё ещё нет, пробуем online
-    if [ ! -d "node_modules" ] || [ ! "$(ls -A node_modules 2>/dev/null)" ]; then
-        echo -e "${YELLOW}Попытка установки через npm (требуется интернет)...${NC}"
-        npm install 2>/dev/null || {
-            echo -e "${RED}✗ Не удалось установить зависимости автоматически${NC}"
-            echo -e "${YELLOW}Установите вручную: cd $APP_DIR && npm install${NC}"
-        }
-    fi
-    
-    # Устанавливаем серверные зависимости
-    if [ ! -d "node_modules/express" ]; then
-        echo -e "${YELLOW}Установка серверных зависимостей...${NC}"
-        npm install express cors morgan ip-range-check multer --save 2>/dev/null || true
-    fi
+    echo -e "${GREEN}✓ Серверные зависимости найдены${NC}"
 fi
 
 # Исправляем права на node_modules
