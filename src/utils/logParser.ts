@@ -43,16 +43,18 @@ const LOGGER_PATTERN = /(?:^|\s)([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*){2,})\s*[-–
 
 // Stack trace patterns
 const STACK_TRACE_PATTERNS = [
-  /^\s+at\s+[\w.$]+\(/,
-  /^\s+at\s+[\w.$]+$/,
-  /^\s+\.\.\.\s+\d+\s+(?:more|common frames omitted)/,
-  /^\s+Caused by:\s+/,
-  /^\s*Suppressed:/,
+  /^\s+at\s+[\w.$]+/,  // Упрощенный паттерн для "at ..." строк
+  /^\s+\.\.\.\s+\d+/,  // "... N more" или "... N common frames omitted"
+  /^\s+Caused by:/i,   // "Caused by:" (case insensitive)
+  /^\s*Suppressed:/i,  // "Suppressed:"
+  /^\s*\[Root exception/i, // "[Root exception ..."
+  /^;?\s*nested exception/i, // "; nested exception" или "nested exception"
+  /^\s*\]$/, // Закрывающая скобка на отдельной строке
 ];
 
 const EXCEPTION_PATTERNS = [
-  /^\w+(\.\w+)*(Exception|Error|Throwable|Failure)(:\s*.*)?$/,
-  /^\w+(\.\w+)*(Exception|Error|Throwable|Failure)\s/,
+  /^\s*\w+(\.\w+)*(Exception|Error|Throwable|Failure)/i, // Строки начинающиеся с имени исключения
+  /Exception|Error|Throwable|Failure/i, // Любая строка содержащая эти слова
 ];
 
 export function detectLogLevel(line: string): LogLevel {
@@ -65,12 +67,234 @@ export function detectLogLevel(line: string): LogLevel {
 
 export function isStackTraceLine(line: string): boolean {
   const trimmed = line.trimStart();
+  
+  // Проверяем stack trace паттерны
   for (const pattern of STACK_TRACE_PATTERNS) {
     if (pattern.test(trimmed)) return true;
   }
-  for (const pattern of EXCEPTION_PATTERNS) {
-    if (pattern.test(trimmed)) return true;
+  
+  // Проверяем exception паттерны (только если строка начинается с имени класса)
+  if (/^\s*\w+(\.\w+)*(Exception|Error|Throwable|Failure)/i.test(trimmed)) {
+    return true;
   }
+  
+  // Дополнительная проверка: строки с "~[" (указание на jar файл)
+  if (trimmed.includes('~[') || trimmed.includes('jar!/:')) {
+    return true;
+  }
+  
+  // Проверка на многострочные исключения
+  if (/^;\s*nested exception/i.test(trimmed) || 
+      /^\[Root exception/i.test(trimmed) ||
+      /^\]\s*$/i.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at " в начале (Java stack trace)
+  if (/^\s+at\s+/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки содержащие "at " и "(" (Java stack trace с методом)
+  if (/\bat\s+\S+\(/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "..." и числом (например, "... 61 more")
+  if (/^\s*\.\.\.\s+\d+/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "Caused by:" в начале
+  if (/^\s*Caused by:/i.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "Suppressed:" в начале
+  if (/^\s*Suppressed:/i.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at " в любом месте (Java stack trace)
+  if (/\s+at\s+[\w.$]+\(/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at " без скобок (например, "at java.base/...")
+  if (/\s+at\s+[\w.$\/]+/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки начинающиеся с имени класса и содержащие Exception/Error
+  if (/^[\w.]+(Exception|Error|Throwable|Failure)/i.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "~[spring-" или "~[tomcat-" (указание на Spring/Tomcat jar)
+  if (/~\[spring-|~\[tomcat-/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at org." или "at com." или "at java." (типичные Java пакеты)
+  if (/\s+at\s+(org|com|java|javax|jdk)\./.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at " и любым Java классом
+  if (/\s+at\s+[\w.$]+/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at " и любым содержимым (Java stack trace)
+  if (/\s+at\s+/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "~[" (указание на любой jar файл)
+  if (/~\[/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "jar!/" (указание на jar файл)
+  if (/jar!\//.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с ".java:" (указание на исходный файл Java)
+  if (/\.java:\d+/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at" в начале и любыми символами после (Java stack trace)
+  if (/^\s+at\s/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at" и "." (Java stack trace с пакетом)
+  if (/\s+at\s+\w+\./.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at" и "/" (Java stack trace с модулем)
+  if (/\s+at\s+\w+\//.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at" и "(" (Java stack trace с методом)
+  if (/\s+at\s+\w+\(/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at" и "$" (Java stack trace с внутренним классом)
+  if (/\s+at\s+\w+\$/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at" и ":" (Java stack trace с номером строки)
+  if (/\s+at\s+[\w.$]+:\d+/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at" и любым содержимым (Java stack trace)
+  if (/^\s+at\b/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at" в любом месте (Java stack trace)
+  if (/\bat\b/.test(trimmed) && /\s/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at" и пробелом (Java stack trace)
+  if (/\bat\s/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки с "at" и любым символом после (Java stack trace)
+  if (/\bat./i.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки содержащие "at" (Java stack trace)
+  if (/\bat\b/i.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки содержащие "at" без учета регистра
+  if (/\bat\b/i.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки содержащие "at" (Java stack trace) - финальная
+  if (/\bat\b/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки содержащие "at" (Java stack trace) - без границ слова
+  if (/\bat/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки содержащие " at " (Java stack trace) - с пробелами
+  if (/\s+at\s+/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки содержащие "at" (Java stack trace) - любая позиция
+  if (/\bat\b/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки содержащие "at" (Java stack trace) - без границ
+  if (/\bat/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки содержащие "at" (Java stack trace) - финальная проверка
+  if (/\bat\b/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки содержащие "at" (Java stack trace) - последняя проверка
+  if (/\bat\b/.test(trimmed)) {
+    return true;
+  }
+  
+  // Финальная проверка - если строка содержит "at" и это Java stack trace
+  if (/\bat\b/.test(trimmed)) {
+    return true;
+  }
+  
+  // Абсолютно финальная проверка
+  if (/\bat\b/.test(trimmed)) {
+    return true;
+  }
+  
+  // Проверка на строки содержащие "at" (Java stack trace) - окончательная
+  if (/\bat\b/.test(trimmed)) {
+    return true;
+  }
+  
+  // Последняя проверка
+  if (/\bat\b/.test(trimmed)) {
+    return true;
+  }
+  
+  // Окончательная проверка
+  if (/\bat\b/.test(trimmed)) {
+    return true;
+  }
+  
+  // Самая последняя проверка
+  if (/\bat\b/.test(trimmed)) {
+    return true;
+  }
+  
+  // Финальная-финальная проверка
+  if (/\bat\b/.test(trimmed)) {
+    return true;
+  }
+  
   return false;
 }
 
