@@ -369,6 +369,7 @@ if (config.features.enableUpload) {
           size: req.file.size
         }
       });
+    });
   });
 }
 
