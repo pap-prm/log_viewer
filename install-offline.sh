@@ -110,9 +110,32 @@ fi
 # Владелец остаётся jenkins (или кто там пишет логи), но readlog должен иметь доступ на чтение
 chmod 755 /opt/assembly_visual
 chmod 755 /opt/assembly_visual/logs
-# Даём всем пользователям право читать логи (файлы обычно 644 от jenkins)
-chmod o+rX /opt/assembly_visual
-chmod o+rX /opt/assembly_visual/logs
+
+# Добавляем пользователя readlog в группу jenkins для доступа к файлам
+if id "jenkins" &>/dev/null; then
+    usermod -aG jenkins "$SERVICE_USER" 2>/dev/null || true
+    echo -e "${GREEN}✓ Пользователь $SERVICE_USER добавлен в группу jenkins${NC}"
+fi
+
+# Устанавливаем ACL для автоматического предоставления прав на чтение новых файлов
+if command -v setfacl &> /dev/null; then
+    # Устанавливаем ACL по умолчанию для директории
+    # Все новые файлы будут автоматически получать права на чтение для группы jenkins и others
+    setfacl -R -m u:readlog:rX /opt/assembly_visual/logs 2>/dev/null || true
+    setfacl -R -m g:jenkins:rX /opt/assembly_visual/logs 2>/dev/null || true
+    setfacl -R -m o::rX /opt/assembly_visual/logs 2>/dev/null || true
+    
+    # Устанавливаем ACL по умолчанию для новых файлов
+    setfacl -R -d -m u:readlog:rX /opt/assembly_visual/logs 2>/dev/null || true
+    setfacl -R -d -m g:jenkins:rX /opt/assembly_visual/logs 2>/dev/null || true
+    setfacl -R -d -m o::rX /opt/assembly_visual/logs 2>/dev/null || true
+    
+    echo -e "${GREEN}✓ ACL настроены для автоматического предоставления прав${NC}"
+else
+    echo -e "${YELLOW}⚠ setfacl не найден, устанавливаем базовые права${NC}"
+    # Устанавливаем базовые права
+    chmod -R o+rX /opt/assembly_visual/logs 2>/dev/null || true
+fi
 
 chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR"

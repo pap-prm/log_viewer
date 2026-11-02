@@ -6,6 +6,7 @@ import { demoFiles } from './utils/demoData';
 import { LogFile } from './utils/logParser';
 import { downloadLogFile as downloadLocalFile } from './utils/download';
 import { fetchLogFiles, fetchLogFile, uploadLogFile, checkServerHealth } from './utils/api';
+import { useFileWatcher } from './hooks/useFileWatcher';
 
 function App() {
   const [files, setFiles] = useState<LogFile[]>(demoFiles);
@@ -49,6 +50,67 @@ function App() {
     };
     checkServer();
   }, []);
+
+  // Функция обновления списка файлов
+  const updateFileList = useCallback(async () => {
+    try {
+      const serverFiles = await fetchLogFiles();
+      const logFiles: LogFile[] = serverFiles.map(f => ({
+        name: f.name,
+        size: f.size,
+        lastModified: new Date(f.lastModified).toLocaleString('ru-RU'),
+        content: '' // Контент загрузим при выборе
+      }));
+      
+      // Обновляем список только если изменился
+      setFiles(prev => {
+        const prevNames = new Set(prev.map(f => f.name));
+        const newNames = new Set(logFiles.map(f => f.name));
+        
+        // Проверяем, есть ли новые файлы
+        const hasNewFiles = logFiles.some(f => !prevNames.has(f.name));
+        // Проверяем, есть ли удалённые файлы
+        const hasRemovedFiles = prev.some(f => !newNames.has(f.name));
+        
+        if (hasNewFiles || hasRemovedFiles) {
+          console.log('📁 Список файлов обновлён:', {
+            новых: logFiles.length - prev.length,
+            удалённых: prev.length - logFiles.length
+          });
+          return logFiles;
+        }
+        
+        return prev;
+      });
+    } catch (err) {
+      console.error('Ошибка обновления списка файлов:', err);
+    }
+  }, []);
+
+  // Периодическое обновление списка файлов (каждые 5 секунд)
+  useEffect(() => {
+    if (!serverMode) return;
+
+    // Обновляем список каждые 5 секунд
+    const intervalId = setInterval(updateFileList, 5000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [serverMode, updateFileList]);
+
+  // WebSocket для мгновенного обновления списка файлов
+  useFileWatcher({
+    onFileAdded: () => {
+      console.log('📄 Получено уведомление о новом файле');
+      updateFileList();
+    },
+    onFileRemoved: () => {
+      console.log('🗑️ Получено уведомление об удалении файла');
+      updateFileList();
+    },
+    enabled: serverMode
+  });
 
   // Загрузка содержимого файла при выборе
   useEffect(() => {
