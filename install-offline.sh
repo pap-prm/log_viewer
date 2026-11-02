@@ -184,8 +184,13 @@ if [ ! -d "dist" ]; then
 fi
 
 # Копируем dist/ в корень приложения (fallback для Express)
-if [ -d "dist" ] && [ ! -d "$APP_DIR/dist" ]; then
-    cp -r dist "$APP_DIR/dist"
+# ВАЖНО: копируем СОДЕРЖИМОЕ dist/, а не саму папку!
+if [ -d "dist" ]; then
+    rm -rf "$APP_DIR/dist"
+    mkdir -p "$APP_DIR/dist"
+    cp -r dist/* "$APP_DIR/dist/"
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR/dist"
+    chmod -R 755 "$APP_DIR/dist"
     echo -e "${GREEN}✓ dist/ скопирован в $APP_DIR/dist${NC}"
 fi
 
