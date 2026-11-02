@@ -19,6 +19,10 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# Сохраняем исходную директорию (где находится архив)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo -e "${YELLOW}Исходная директория: $SCRIPT_DIR${NC}"
+
 # Конфигурация
 APP_NAME="readlog"
 APP_DIR="/opt/readlog"
@@ -95,7 +99,7 @@ tar -cf - \
     --exclude='install-server.sh' \
     --exclude='npm-cache' \
     --exclude='offline-packages' \
-    -C ./ . | tar -xf - -C "$APP_DIR/"
+    -C "$SCRIPT_DIR" . | tar -xf - -C "$APP_DIR/"
 
 # Копируем server.js и package.json из server/ в корень для удобства
 if [ -f "$APP_DIR/server/server.js" ] && [ ! -f "$APP_DIR/server.js" ]; then
@@ -132,32 +136,30 @@ if [ -f "$APP_DIR/server/config.json" ] && [ ! -f "$APP_DIR/config.json" ]; then
 fi
 
 # Проверяем, есть ли node_modules с содержимым
-if [ -d "node_modules" ] && [ "$(ls -A node_modules 2>/dev/null)" ]; then
-    echo -e "${GREEN}✓ node_modules уже присутствуют в пакете ($(ls node_modules | wc -l) пакетов)${NC}"
+if [ -d "$APP_DIR/node_modules" ] && [ "$(ls -A "$APP_DIR/node_modules" 2>/dev/null)" ]; then
+    echo -e "${GREEN}✓ node_modules уже присутствуют в пакете ($(ls "$APP_DIR/node_modules" | wc -l) пакетов)${NC}"
 else
     echo -e "${YELLOW}node_modules не найдены${NC}"
 fi
 
 # Проверяем наличие серверных зависимостей (express)
-if [ ! -d "node_modules/express" ]; then
+if [ ! -d "$APP_DIR/node_modules/express" ]; then
     echo -e "${YELLOW}Серверные зависимости (express) не найдены${NC}"
     
     # Пробуем скопировать из server-deps/ (если есть в пакете)
-    if [ -d "server-deps/node_modules" ]; then
+    if [ -d "$SCRIPT_DIR/server-deps/node_modules" ]; then
         echo -e "${YELLOW}Копируем серверные зависимости из server-deps/...${NC}"
-        cp -r server-deps/node_modules/* node_modules/ 2>/dev/null || {
-            mkdir -p node_modules
-            cp -r server-deps/node_modules/* node_modules/
-        }
+        mkdir -p node_modules
+        cp -r "$SCRIPT_DIR/server-deps/node_modules/"* node_modules/ 2>/dev/null || true
         echo -e "${GREEN}✓ Серверные зависимости скопированы${NC}"
     # Пробуем из offline-packages/
-    elif [ -d "offline-packages" ] && ls offline-packages/express-*.tgz 1>/dev/null 2>&1; then
+    elif [ -d "$SCRIPT_DIR/offline-packages" ] && ls "$SCRIPT_DIR/offline-packages"/express-*.tgz 1>/dev/null 2>&1; then
         echo -e "${YELLOW}Устанавливаем серверные зависимости из offline-packages/...${NC}"
-        npm install offline-packages/express-*.tgz \
-                    offline-packages/cors-*.tgz \
-                    offline-packages/morgan-*.tgz \
-                    offline-packages/ip-range-check-*.tgz \
-                    offline-packages/multer-*.tgz \
+        npm install "$SCRIPT_DIR/offline-packages"/express-*.tgz \
+                    "$SCRIPT_DIR/offline-packages"/cors-*.tgz \
+                    "$SCRIPT_DIR/offline-packages"/morgan-*.tgz \
+                    "$SCRIPT_DIR/offline-packages"/ip-range-check-*.tgz \
+                    "$SCRIPT_DIR/offline-packages"/multer-*.tgz \
                     --save --ignore-scripts 2>/dev/null || true
     else
         echo -e "${RED}✗ Серверные зависимости не найдены в пакете${NC}"
@@ -169,8 +171,8 @@ else
 fi
 
 # Исправляем права на node_modules
-if [ -d "node_modules" ]; then
-    chown -R "$SERVICE_USER:$SERVICE_USER" node_modules
+if [ -d "$APP_DIR/node_modules" ]; then
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR/node_modules"
     echo -e "${GREEN}Зависимости установлены${NC}"
 else
     echo -e "${RED}ВНИМАНИЕ: node_modules не найден!${NC}"
@@ -179,28 +181,44 @@ fi
 # 6. Сборка (если нужно)
 echo -e "${YELLOW}[6/8] Сборка production-версии...${NC}"
 cd "$APP_DIR"
-if [ ! -d "dist" ]; then
-    npm run build
-fi
 
-# Копируем dist/ в корень приложения (fallback для Express)
-# ВАЖНО: копируем СОДЕРЖИМОЕ dist/, а не саму папку!
-if [ -d "dist" ]; then
+# Проверяем, есть ли dist/ в исходной директории архива
+if [ -d "$SCRIPT_DIR/dist" ]; then
+    echo -e "${YELLOW}Копирование dist/ из архива...${NC}"
     rm -rf "$APP_DIR/dist"
     mkdir -p "$APP_DIR/dist"
-    cp -r dist/* "$APP_DIR/dist/"
+    cp -r "$SCRIPT_DIR/dist/"* "$APP_DIR/dist/"
     chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR/dist"
     chmod -R 755 "$APP_DIR/dist"
-    echo -e "${GREEN}✓ dist/ скопирован в $APP_DIR/dist${NC}"
+    echo -e "${GREEN}✓ dist/ скопирован из архива${NC}"
+elif [ -d "$APP_DIR/dist" ]; then
+    echo -e "${GREEN}✓ dist/ уже присутствует в $APP_DIR${NC}"
+else
+    echo -e "${YELLOW}dist/ не найден, пытаемся собрать...${NC}"
+    if [ -f "$APP_DIR/package.json" ]; then
+        npm run build 2>/dev/null || {
+            echo -e "${RED}✗ Не удалось собрать dist/${NC}"
+            echo -e "${YELLOW}Скопируйте dist/ вручную из архива${NC}"
+        }
+    fi
 fi
 
 echo -e "${GREEN}Сборка завершена${NC}"
 
 # 7. Копирование веб-файлов в стандартную директорию Apache
 echo -e "${YELLOW}[7/8] Размещение веб-файлов в $WEB_DIR...${NC}"
-cp -r "$APP_DIR/dist/"* "$WEB_DIR/"
-chown -R root:apache "$WEB_DIR"
-chmod -R 755 "$WEB_DIR"
+if [ -d "$APP_DIR/dist" ] && [ "$(ls -A "$APP_DIR/dist" 2>/dev/null)" ]; then
+    rm -rf "$WEB_DIR"
+    mkdir -p "$WEB_DIR"
+    cp -r "$APP_DIR/dist/"* "$WEB_DIR/"
+    chown -R root:apache "$WEB_DIR"
+    chmod -R 755 "$WEB_DIR"
+    echo -e "${GREEN}✓ Веб-файлы размещены в $WEB_DIR${NC}"
+else
+    echo -e "${RED}✗ dist/ не найден или пуст в $APP_DIR${NC}"
+    echo -e "${YELLOW}Веб-файлы не скопированы. Скопируйте вручную:${NC}"
+    echo -e "${YELLOW}  sudo cp -r $APP_DIR/dist/* $WEB_DIR/${NC}"
+fi
 
 # Удаление старых конфигов (от предыдущих версий)
 if [ -f /etc/httpd/conf.d/logviewer.conf ]; then
@@ -219,7 +237,6 @@ if command -v semanage &> /dev/null; then
     semanage fcontext -a -t httpd_sys_content_t "$WEB_DIR(/.*)?" 2>/dev/null || true
     restorecon -Rv "$WEB_DIR" 2>/dev/null || true
 fi
-echo -e "${GREEN}Веб-файлы размещены в $WEB_DIR${NC}"
 
 # 8. Создание systemd-сервиса
 echo -e "${YELLOW}[8/8] Создание systemd-сервиса...${NC}"
