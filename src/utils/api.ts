@@ -2,7 +2,18 @@
  * API клиент для работы с сервером Log Viewer
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// Динамическое определение URL API на основе текущего хоста
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // Используем относительный путь для API
+  // Это работает, если фронтенд и API на одном хосте/порту
+  return '/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export interface LogFileInfo {
   name: string;
