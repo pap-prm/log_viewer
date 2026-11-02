@@ -13,15 +13,19 @@ class LogWatcher {
   }
 
   start(server) {
-    // Создаём WebSocket сервер
+    // Создаём WebSocket сервер для логов
     this.wss = new WebSocket.Server({ server, path: '/ws/logs' });
     
+    // Создаём WebSocket сервер для уведомлений о файлах
+    this.wssFiles = new WebSocket.Server({ server, path: '/ws/files' });
+    
     console.log('✓ WebSocket сервер запущен на /ws/logs');
+    console.log('✓ WebSocket сервер запущен на /ws/files');
 
-    // Обработка подключений
+    // Обработка подключений к /ws/logs
     this.wss.on('connection', (ws, req) => {
       const clientIp = req.socket.remoteAddress;
-      console.log(`✓ WebSocket клиент подключён: ${clientIp}`);
+      console.log(`✓ WebSocket клиент подключён к /ws/logs: ${clientIp}`);
       
       this.clients.add(ws);
 
@@ -35,12 +39,12 @@ class LogWatcher {
       });
 
       ws.on('close', () => {
-        console.log(`✓ WebSocket клиент отключён: ${clientIp}`);
+        console.log(`✓ WebSocket клиент отключён от /ws/logs: ${clientIp}`);
         this.clients.delete(ws);
       });
 
       ws.on('error', (error) => {
-        console.error('Ошибка WebSocket:', error);
+        console.error('Ошибка WebSocket /ws/logs:', error);
         this.clients.delete(ws);
       });
 
@@ -48,6 +52,32 @@ class LogWatcher {
       ws.send(JSON.stringify({
         type: 'connected',
         message: 'Подключено к серверу логов',
+        logsDir: this.logsDir
+      }));
+    });
+
+    // Обработка подключений к /ws/files
+    this.fileClients = new Set();
+    this.wssFiles.on('connection', (ws, req) => {
+      const clientIp = req.socket.remoteAddress;
+      console.log(`✓ WebSocket клиент подключён к /ws/files: ${clientIp}`);
+      
+      this.fileClients.add(ws);
+
+      ws.on('close', () => {
+        console.log(`✓ WebSocket клиент отключён от /ws/files: ${clientIp}`);
+        this.fileClients.delete(ws);
+      });
+
+      ws.on('error', (error) => {
+        console.error('Ошибка WebSocket /ws/files:', error);
+        this.fileClients.delete(ws);
+      });
+
+      // Отправляем приветственное сообщение
+      ws.send(JSON.stringify({
+        type: 'connected',
+        message: 'Подключено к серверу уведомлений о файлах',
         logsDir: this.logsDir
       }));
     });
@@ -183,6 +213,16 @@ class LogWatcher {
   broadcast(message) {
     const messageStr = JSON.stringify(message);
     
+    // Отправляем уведомления о файлах на /ws/files
+    if (message.type === 'file_added' || message.type === 'file_removed') {
+      this.fileClients?.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(messageStr);
+        }
+      });
+    }
+    
+    // Отправляем новые строки на /ws/logs
     this.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
         // Если клиент подписан на конкретный файл, отправляем только его
@@ -205,6 +245,9 @@ class LogWatcher {
     }
     if (this.wss) {
       this.wss.close();
+    }
+    if (this.wssFiles) {
+      this.wssFiles.close();
     }
   }
 }
