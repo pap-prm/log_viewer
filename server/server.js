@@ -148,11 +148,22 @@ app.use('/api', checkAuth);
 // Проверка существования директории с логами
 function checkLogsDirectory() {
   if (!fs.existsSync(LOGS_DIR)) {
-    console.error(`✗ Директория с логами не найдена: ${LOGS_DIR}`);
-    console.error('  Создайте директорию или измените путь в config.json');
-    process.exit(1);
+    console.warn(`⚠ Директория с логами не найдена: ${LOGS_DIR}`);
+    console.warn('  Сервер запустится, но чтение логов будет недоступно.');
+    console.warn('  Создайте директорию и дайте права пользователю readlog.');
+    return false;
   }
-  console.log(`✓ Директория с логами: ${LOGS_DIR}`);
+  
+  // Проверяем права на чтение
+  try {
+    fs.accessSync(LOGS_DIR, fs.constants.R_OK);
+    console.log(`✓ Директория с логами: ${LOGS_DIR}`);
+    return true;
+  } catch (err) {
+    console.warn(`⚠ Нет прав на чтение директории: ${LOGS_DIR}`);
+    console.warn('  Выполните: sudo chmod o+rX ' + LOGS_DIR);
+    return false;
+  }
 }
 
 // API: Получить список файлов
@@ -262,41 +273,74 @@ app.get('/api/download/:filename', (req, res) => {
 });
 
 // API: Загрузить файл (опционально)
+// Multer инициализируется лениво — только при реальном запросе
 if (config.features.enableUpload) {
-  const multer = require('multer');
-  const upload = multer({
-    dest: LOGS_DIR,
-    limits: {
-      fileSize: config.features.maxUploadSize || 52428800
-    },
-    fileFilter: (req, file, cb) => {
-      if (file.mimetype === 'text/plain' || file.originalname.endsWith('.log')) {
-        cb(null, true);
-      } else {
-        cb(new Error('Разрешены только текстовые файлы'));
-      }
-    }
-  });
-
-  app.post('/api/upload', upload.single('file'), (req, res) => {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'Файл не загружен'
+  let upload = null;
+  
+  function getUpload() {
+    if (!upload) {
+      const multer = require('multer');
+      upload = multer({
+        dest: LOGS_DIR,
+        limits: {
+          fileSize: config.features.maxUploadSize || 52428800
+        },
+        fileFilter: (req, file, cb) => {
+          if (file.mimetype === 'text/plain' || file.originalname.endsWith('.log')) {
+            cb(null, true);
+          } else {
+            cb(new Error('Разрешены только текстовые файлы'));
+          }
+        }
       });
     }
+    return upload;
+  }
 
-    const newPath = path.join(LOGS_DIR, req.file.originalname);
-    fs.renameSync(req.file.path, newPath);
-
-    res.json({
-      success: true,
-      message: 'Файл загружен',
-      file: {
-        name: req.file.originalname,
-        size: req.file.size
+  app.post('/api/upload', (req, res) => {
+    // Проверяем доступность директории перед загрузкой
+    if (!fs.existsSync(LOGS_DIR)) {
+      return res.status(500).json({
+        success: false,
+        error: `Директория для загрузки не найдена: ${LOGS_DIR}`
+      });
+    }
+    
+    try {
+      fs.accessSync(LOGS_DIR, fs.constants.W_OK);
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        error: `Нет прав на запись в директорию: ${LOGS_DIR}`
+      });
+    }
+    
+    getUpload().single('file')(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({
+          success: false,
+          error: err.message
+        });
       }
-    });
+      
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          error: 'Файл не загружен'
+        });
+      }
+
+      const newPath = path.join(LOGS_DIR, req.file.originalname);
+      fs.renameSync(req.file.path, newPath);
+
+      res.json({
+        success: true,
+        message: 'Файл загружен',
+        file: {
+          name: req.file.originalname,
+          size: req.file.size
+        }
+      });
   });
 }
 

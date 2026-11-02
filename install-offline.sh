@@ -63,13 +63,23 @@ echo -e "${YELLOW}[3/8] Создание директорий...${NC}"
 mkdir -p "$APP_DIR"
 mkdir -p "$LOG_DIR"
 mkdir -p "$WEB_DIR"
+
+# Создаём директорию с логами если её нет
 if [ ! -d "/opt/assembly_visual/logs" ]; then
     echo -e "${YELLOW}⚠ Директория /opt/assembly_visual/logs не найдена${NC}"
     mkdir -p /opt/assembly_visual/logs
 fi
+
+# Настраиваем права на директорию с логами
+# Владелец остаётся jenkins (или кто там пишет логи), но readlog должен иметь доступ на чтение
+chmod 755 /opt/assembly_visual
+chmod 755 /opt/assembly_visual/logs
+# Даём всем пользователям право читать логи (файлы обычно 644 от jenkins)
+chmod o+rX /opt/assembly_visual
+chmod o+rX /opt/assembly_visual/logs
+
 chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR"
-chmod 755 /opt/assembly_visual/logs
 echo -e "${GREEN}✓ Директории созданы${NC}"
 
 # 4. Установка приложения
