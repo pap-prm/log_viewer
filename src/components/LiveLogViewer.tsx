@@ -14,10 +14,40 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [isLive, setIsLive] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [updateInterval, setUpdateInterval] = useState(5); // секунды
   const containerRef = useRef<HTMLDivElement>(null);
   const lineCounter = useRef(1);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const wsUrl = `ws://${window.location.hostname}:${window.location.port || 3001}/ws/logs`;
+  const bufferRef = useRef<LogEntry[]>([]);
+
+  // Обработка буфера с заданным интервалом
+  useEffect(() => {
+    if (isLive && updateInterval > 0) {
+      intervalRef.current = setInterval(() => {
+        if (bufferRef.current.length > 0) {
+          const newEntries = [...bufferRef.current];
+          bufferRef.current = [];
+          
+          setEntries(prev => {
+            const combined = [...prev, ...newEntries];
+            if (combined.length > maxLines) {
+              return combined.slice(-maxLines);
+            }
+            return combined;
+          });
+        }
+      }, updateInterval * 1000);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [isLive, updateInterval, maxLines]);
 
   const handleWebSocketMessage = useCallback((message: any) => {
     if (message.type === 'new_lines' && message.lines) {
@@ -31,16 +61,21 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
         return entry;
       });
 
-      setEntries(prev => {
-        const combined = [...prev, ...newEntries];
-        // Ограничиваем количество строк
-        if (combined.length > maxLines) {
-          return combined.slice(-maxLines);
-        }
-        return combined;
-      });
+      // Если интервал 0 или 1, добавляем сразу
+      if (updateInterval <= 1) {
+        setEntries(prev => {
+          const combined = [...prev, ...newEntries];
+          if (combined.length > maxLines) {
+            return combined.slice(-maxLines);
+          }
+          return combined;
+        });
+      } else {
+        // Иначе добавляем в буфер
+        bufferRef.current = [...bufferRef.current, ...newEntries];
+      }
     }
-  }, [fileName, maxLines]);
+  }, [fileName, maxLines, updateInterval]);
 
   const { isConnected, connect, disconnect } = useWebSocket({
     url: wsUrl,
@@ -203,6 +238,23 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
             </svg>
             Автопрокрутка
           </button>
+
+          {/* Выбор интервала обновления */}
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-400">Обновление:</label>
+            <select
+              value={updateInterval}
+              onChange={(e) => setUpdateInterval(Number(e.target.value))}
+              className="bg-gray-700 text-gray-200 text-xs rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none"
+            >
+              <option value={1}>1 сек</option>
+              <option value={5}>5 сек</option>
+              <option value={10}>10 сек</option>
+              <option value={15}>15 сек</option>
+              <option value={30}>30 сек</option>
+              <option value={60}>60 сек</option>
+            </select>
+          </div>
 
           <button
             onClick={handleClear}
