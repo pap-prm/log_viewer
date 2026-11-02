@@ -4,6 +4,8 @@ const path = require('path');
 const cors = require('cors');
 const morgan = require('morgan');
 const ipRangeCheck = require('ip-range-check');
+const http = require('http');
+const LogWatcher = require('./websocket');
 
 // Загрузка конфигурации
 // Ищем config.json сначала в текущей директории, потом в server/
@@ -369,6 +371,7 @@ if (config.features.enableUpload) {
           size: req.file.size
         }
       });
+    });
   });
 }
 
@@ -413,18 +416,45 @@ app.use((err, req, res, next) => {
 // Запуск сервера
 checkLogsDirectory();
 
-app.listen(PORT, HOST, () => {
+// Создаём HTTP сервер
+const server = http.createServer(app);
+
+// Запускаем WebSocket для отслеживания логов в реальном времени
+const logWatcher = new LogWatcher(LOGS_DIR);
+logWatcher.start(server);
+
+// Запускаем сервер
+server.listen(PORT, HOST, () => {
   console.log('');
   console.log('═══════════════════════════════════════════');
   console.log('  Log Viewer Server запущен');
   console.log('═══════════════════════════════════════════');
   console.log(`  Адрес: http://${HOST}:${PORT}`);
+  console.log(`  WebSocket: ws://${HOST}:${PORT}/ws/logs`);
   console.log(`  Логи: ${LOGS_DIR}`);
   console.log(`  Белый список IP: ${config.security.whitelist.enabled ? 'ВКЛ' : 'ВЫКЛ'}`);
   if (config.security.whitelist.enabled) {
     console.log(`  Разрешённые IP: ${config.security.whitelist.ips.join(', ')}`);
   }
   console.log(`  Авторизация LDAP: ${config.security.auth.enabled ? 'ВКЛ' : 'ВЫКЛ'}`);
+  console.log(`  Live режим: ВКЛ (WebSocket)`);
   console.log('═══════════════════════════════════════════');
   console.log('');
+});
+
+// Обработка завершения работы
+process.on('SIGTERM', () => {
+  console.log('Получен сигнал SIGTERM, закрываем сервер...');
+  logWatcher.stop();
+  server.close(() => {
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('Получен сигнал SIGINT, закрываем сервер...');
+  logWatcher.stop();
+  server.close(() => {
+    process.exit(0);
+  });
 });

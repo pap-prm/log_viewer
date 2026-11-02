@@ -16,7 +16,8 @@
         "127.0.0.1",
         "::1",
         "192.168.1.0/24",
-        "10.0.0.0/8"
+        "10.0.0.0/8",
+        "10.200.10.12"
       ]
     },
     "auth": {
@@ -48,7 +49,12 @@
   "features": {
     "enableUpload": true,
     "enableDownload": true,
-    "maxUploadSize": 52428800
+    "maxUploadSize": 52428800,
+    "liveUpdate": {
+      "enabled": true,
+      "defaultInterval": 5,
+      "intervals": [1, 5, 10, 15, 30, 60]
+    }
   },
   "logging": {
     "level": "info",

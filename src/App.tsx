@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FileList } from './components/FileList';
 import { LogViewer } from './components/LogViewer';
+import { LiveLogViewer } from './components/LiveLogViewer';
 import { demoFiles } from './utils/demoData';
 import { LogFile } from './utils/logParser';
 import { downloadLogFile as downloadLocalFile } from './utils/download';
@@ -13,6 +14,7 @@ function App() {
   const [serverMode, setServerMode] = useState(false);
   const [serverConnected, setServerConnected] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<'static' | 'live'>('static');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentFile = files.find(f => f.name === selectedFile);
@@ -228,6 +230,38 @@ function App() {
             {loading ? 'Загрузка...' : 'Загрузить'}
           </button>
           
+          {/* Переключатель режимов просмотра */}
+          <div className="flex items-center gap-1 bg-gray-700 rounded-md p-0.5">
+            <button
+              onClick={() => setViewMode('static')}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                viewMode === 'static'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+              title="Статический режим просмотра"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Статика
+            </button>
+            <button
+              onClick={() => setViewMode('live')}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                viewMode === 'live'
+                  ? 'bg-red-600 text-white'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+              title="Live режим (tail -f)"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Live
+            </button>
+          </div>
+
           {currentFile && (
             <button
               onClick={handleDownload}
@@ -266,7 +300,9 @@ function App() {
 
         {/* Log viewer */}
         <main className="flex-1 overflow-hidden">
-          {loading && !currentFile?.content ? (
+          {viewMode === 'live' ? (
+            <LiveLogViewer fileName={selectedFile || undefined} />
+          ) : loading && !currentFile?.content ? (
             <div className="flex items-center justify-center h-full text-gray-500">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
