@@ -36,7 +36,12 @@
       "enabled": true,
       "origins": [
         "http://localhost:3000",
-        "http://localhost:3001"
+        "http://localhost:3001",
+        "http://localhost:5555",
+        "http://omega-test-02.pmz.motor.loc:5555",
+        "http://omega-test-02.pmz.motor.loc",
+        "http://10.200.4.105:5555",
+        "http://10.200.4.105"
       ]
     }
   },

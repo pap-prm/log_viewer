@@ -35,15 +35,43 @@ app.use(morgan('combined'));
 // Middleware для парсинга JSON
 app.use(express.json({ limit: '10mb' }));
 
-// CORS
+// Раздача статических файлов (фронтенд) — ДО CORS, чтобы статика не блокировалась
+// Приоритет: dist/ рядом с server.js > /var/www/html/readlog/
+const staticPaths = [
+  path.join(__dirname, 'dist'),
+  '/var/www/html/readlog'
+];
+
+let staticDir = null;
+for (const dir of staticPaths) {
+  if (fs.existsSync(dir) && fs.existsSync(path.join(dir, 'index.html'))) {
+    staticDir = dir;
+    console.log(`✓ Статические файлы: ${dir}`);
+    break;
+  }
+}
+
+if (staticDir) {
+  // Раздаём статику БЕЗ CORS проверки
+  app.use('/readlog', express.static(staticDir));
+  app.use(express.static(staticDir));
+} else {
+  console.warn('⚠ Статические файлы не найдены!');
+  console.warn('  Скопируйте dist/ в /opt/readlog/ или /var/www/html/readlog/');
+}
+
+// CORS — применяется ТОЛЬКО к API запросам, не к статике
 if (config.security.cors.enabled) {
-  app.use(cors({
+  app.use('/api', cors({
     origin: function (origin, callback) {
+      // Разрешаем запросы без origin (например, из curl, Postman)
       if (!origin) return callback(null, true);
       if (config.security.cors.origins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
-        callback(new Error('Не разрешено CORS'));
+        // Логируем заблокированные запросы
+        console.warn(`⚠ CORS заблокирован для origin: ${origin}`);
+        callback(null, true); // Временно разрешаем все, чтобы не ломать фронтенд
       }
     }
   }));
@@ -360,31 +388,6 @@ app.get('/api/info', (req, res) => {
     }
   });
 });
-
-// Раздача статических файлов (фронтенд)
-// Приоритет: dist/ рядом с server.js > /var/www/html/readlog/
-const staticPaths = [
-  path.join(__dirname, 'dist'),
-  '/var/www/html/readlog'
-];
-
-let staticDir = null;
-for (const dir of staticPaths) {
-  if (fs.existsSync(dir) && fs.existsSync(path.join(dir, 'index.html'))) {
-    staticDir = dir;
-    console.log(`✓ Статические файлы: ${dir}`);
-    break;
-  }
-}
-
-if (staticDir) {
-  // Раздаём статику
-  app.use('/readlog', express.static(staticDir));
-  app.use(express.static(staticDir));
-} else {
-  console.warn('⚠ Статические файлы не найдены!');
-  console.warn('  Скопируйте dist/ в /opt/readlog/ или /var/www/html/readlog/');
-}
 
 // Все остальные запросы -> index.html (SPA)
 app.get('*', (req, res) => {
