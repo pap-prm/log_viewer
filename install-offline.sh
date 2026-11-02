@@ -63,13 +63,23 @@ echo -e "${YELLOW}[3/8] Создание директорий...${NC}"
 mkdir -p "$APP_DIR"
 mkdir -p "$LOG_DIR"
 mkdir -p "$WEB_DIR"
+
+# Создаём директорию с логами если её нет
 if [ ! -d "/opt/assembly_visual/logs" ]; then
     echo -e "${YELLOW}⚠ Директория /opt/assembly_visual/logs не найдена${NC}"
     mkdir -p /opt/assembly_visual/logs
 fi
+
+# Настраиваем права на директорию с логами
+# Владелец остаётся jenkins (или кто там пишет логи), но readlog должен иметь доступ на чтение
+chmod 755 /opt/assembly_visual
+chmod 755 /opt/assembly_visual/logs
+# Даём всем пользователям право читать логи (файлы обычно 644 от jenkins)
+chmod o+rX /opt/assembly_visual
+chmod o+rX /opt/assembly_visual/logs
+
 chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR"
-chmod 755 /opt/assembly_visual/logs
 echo -e "${GREEN}✓ Директории созданы${NC}"
 
 # 4. Установка приложения
@@ -172,6 +182,18 @@ cd "$APP_DIR"
 if [ ! -d "dist" ]; then
     npm run build
 fi
+
+# Копируем dist/ в корень приложения (fallback для Express)
+# ВАЖНО: копируем СОДЕРЖИМОЕ dist/, а не саму папку!
+if [ -d "dist" ]; then
+    rm -rf "$APP_DIR/dist"
+    mkdir -p "$APP_DIR/dist"
+    cp -r dist/* "$APP_DIR/dist/"
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR/dist"
+    chmod -R 755 "$APP_DIR/dist"
+    echo -e "${GREEN}✓ dist/ скопирован в $APP_DIR/dist${NC}"
+fi
+
 echo -e "${GREEN}Сборка завершена${NC}"
 
 # 7. Копирование веб-файлов в стандартную директорию Apache

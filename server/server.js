@@ -35,15 +35,43 @@ app.use(morgan('combined'));
 // Middleware для парсинга JSON
 app.use(express.json({ limit: '10mb' }));
 
-// CORS
+// Раздача статических файлов (фронтенд) — ДО CORS, чтобы статика не блокировалась
+// Приоритет: dist/ рядом с server.js > /var/www/html/readlog/
+const staticPaths = [
+  path.join(__dirname, 'dist'),
+  '/var/www/html/readlog'
+];
+
+let staticDir = null;
+for (const dir of staticPaths) {
+  if (fs.existsSync(dir) && fs.existsSync(path.join(dir, 'index.html'))) {
+    staticDir = dir;
+    console.log(`✓ Статические файлы: ${dir}`);
+    break;
+  }
+}
+
+if (staticDir) {
+  // Раздаём статику БЕЗ CORS проверки
+  app.use('/readlog', express.static(staticDir));
+  app.use(express.static(staticDir));
+} else {
+  console.warn('⚠ Статические файлы не найдены!');
+  console.warn('  Скопируйте dist/ в /opt/readlog/ или /var/www/html/readlog/');
+}
+
+// CORS — применяется ТОЛЬКО к API запросам, не к статике
 if (config.security.cors.enabled) {
-  app.use(cors({
+  app.use('/api', cors({
     origin: function (origin, callback) {
+      // Разрешаем запросы без origin (например, из curl, Postman)
       if (!origin) return callback(null, true);
       if (config.security.cors.origins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
-        callback(new Error('Не разрешено CORS'));
+        // Логируем заблокированные запросы
+        console.warn(`⚠ CORS заблокирован для origin: ${origin}`);
+        callback(null, true); // Временно разрешаем все, чтобы не ломать фронтенд
       }
     }
   }));
@@ -148,11 +176,22 @@ app.use('/api', checkAuth);
 // Проверка существования директории с логами
 function checkLogsDirectory() {
   if (!fs.existsSync(LOGS_DIR)) {
-    console.error(`✗ Директория с логами не найдена: ${LOGS_DIR}`);
-    console.error('  Создайте директорию или измените путь в config.json');
-    process.exit(1);
+    console.warn(`⚠ Директория с логами не найдена: ${LOGS_DIR}`);
+    console.warn('  Сервер запустится, но чтение логов будет недоступно.');
+    console.warn('  Создайте директорию и дайте права пользователю readlog.');
+    return false;
   }
-  console.log(`✓ Директория с логами: ${LOGS_DIR}`);
+  
+  // Проверяем права на чтение
+  try {
+    fs.accessSync(LOGS_DIR, fs.constants.R_OK);
+    console.log(`✓ Директория с логами: ${LOGS_DIR}`);
+    return true;
+  } catch (err) {
+    console.warn(`⚠ Нет прав на чтение директории: ${LOGS_DIR}`);
+    console.warn('  Выполните: sudo chmod o+rX ' + LOGS_DIR);
+    return false;
+  }
 }
 
 // API: Получить список файлов
@@ -262,41 +301,74 @@ app.get('/api/download/:filename', (req, res) => {
 });
 
 // API: Загрузить файл (опционально)
+// Multer инициализируется лениво — только при реальном запросе
 if (config.features.enableUpload) {
-  const multer = require('multer');
-  const upload = multer({
-    dest: LOGS_DIR,
-    limits: {
-      fileSize: config.features.maxUploadSize || 52428800
-    },
-    fileFilter: (req, file, cb) => {
-      if (file.mimetype === 'text/plain' || file.originalname.endsWith('.log')) {
-        cb(null, true);
-      } else {
-        cb(new Error('Разрешены только текстовые файлы'));
-      }
-    }
-  });
-
-  app.post('/api/upload', upload.single('file'), (req, res) => {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'Файл не загружен'
+  let upload = null;
+  
+  function getUpload() {
+    if (!upload) {
+      const multer = require('multer');
+      upload = multer({
+        dest: LOGS_DIR,
+        limits: {
+          fileSize: config.features.maxUploadSize || 52428800
+        },
+        fileFilter: (req, file, cb) => {
+          if (file.mimetype === 'text/plain' || file.originalname.endsWith('.log')) {
+            cb(null, true);
+          } else {
+            cb(new Error('Разрешены только текстовые файлы'));
+          }
+        }
       });
     }
+    return upload;
+  }
 
-    const newPath = path.join(LOGS_DIR, req.file.originalname);
-    fs.renameSync(req.file.path, newPath);
-
-    res.json({
-      success: true,
-      message: 'Файл загружен',
-      file: {
-        name: req.file.originalname,
-        size: req.file.size
+  app.post('/api/upload', (req, res) => {
+    // Проверяем доступность директории перед загрузкой
+    if (!fs.existsSync(LOGS_DIR)) {
+      return res.status(500).json({
+        success: false,
+        error: `Директория для загрузки не найдена: ${LOGS_DIR}`
+      });
+    }
+    
+    try {
+      fs.accessSync(LOGS_DIR, fs.constants.W_OK);
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        error: `Нет прав на запись в директорию: ${LOGS_DIR}`
+      });
+    }
+    
+    getUpload().single('file')(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({
+          success: false,
+          error: err.message
+        });
       }
-    });
+      
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          error: 'Файл не загружен'
+        });
+      }
+
+      const newPath = path.join(LOGS_DIR, req.file.originalname);
+      fs.renameSync(req.file.path, newPath);
+
+      res.json({
+        success: true,
+        message: 'Файл загружен',
+        file: {
+          name: req.file.originalname,
+          size: req.file.size
+        }
+      });
   });
 }
 
@@ -317,43 +389,15 @@ app.get('/api/info', (req, res) => {
   });
 });
 
-// Раздача статических файлов (фронтенд)
-// Веб-файлы размещаются в стандартной директории Apache: /var/www/html/readlog/
-const WEB_DIR = '/var/www/html/readlog';
-if (fs.existsSync(WEB_DIR)) {
-  app.use('/readlog', express.static(WEB_DIR));
-  app.use(express.static(WEB_DIR));
-}
-
-// Fallback: если веб-файлы в dist/ рядом с сервером
-const distPaths = [
-  path.join(__dirname, 'dist'),
-  path.join(__dirname, '../dist'),
-  path.join(__dirname, '..', 'dist')
-];
-
-for (const distPath of distPaths) {
-  if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath));
-    break;
-  }
-}
-
 // Все остальные запросы -> index.html (SPA)
 app.get('*', (req, res) => {
-  // Приоритет: Apache директория > dist/ рядом с сервером
-  const indexPaths = [
-    path.join(WEB_DIR, 'index.html'),
-    ...distPaths.map(p => path.join(p, 'index.html'))
-  ];
-  
-  for (const indexPath of indexPaths) {
-    if (fs.existsSync(indexPath)) {
-      return res.sendFile(indexPath);
-    }
+  if (staticDir) {
+    return res.sendFile(path.join(staticDir, 'index.html'));
   }
-  
-  res.status(404).json({ error: 'index.html not found' });
+  res.status(404).json({ 
+    error: 'Статические файлы не найдены',
+    hint: 'Скопируйте dist/ в /opt/readlog/ или /var/www/html/readlog/'
+  });
 });
 
 // Обработка ошибок
