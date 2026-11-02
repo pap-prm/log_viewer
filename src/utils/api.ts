@@ -8,12 +8,9 @@ const getApiBaseUrl = () => {
     return import.meta.env.VITE_API_URL;
   }
   
-  // Используем текущий хост и порт
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  const port = window.location.port || '3001';
-  
-  return `${protocol}//${hostname}:${port}/api`;
+  // Используем относительный путь для API
+  // Это работает, если фронтенд и API на одном хосте/порту
+  return '/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();

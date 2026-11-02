@@ -21,11 +21,16 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
 
   // Динамическое определение WebSocket URL
   const getWsUrl = () => {
+    // Позволяем настройку через переменную окружения
+    if (import.meta.env.VITE_WS_URL) {
+      return import.meta.env.VITE_WS_URL;
+    }
+    
     const hostname = window.location.hostname;
     const port = window.location.port;
     
-    // Если порт не указан или это стандартный порт HTTP/HTTPS, используем 3001
-    const wsPort = (!port || port === '80' || port === '443') ? '3001' : port;
+    // Если порт не указан или это стандартный порт HTTP/HTTPS, используем 5555
+    const wsPort = (!port || port === '80' || port === '443') ? '5555' : port;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
     return `${protocol}//${hostname}:${wsPort}/ws/logs`;
