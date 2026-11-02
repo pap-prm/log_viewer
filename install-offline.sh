@@ -171,6 +171,12 @@ cp -r "$APP_DIR/dist/"* "$WEB_DIR/"
 chown -R root:apache "$WEB_DIR"
 chmod -R 755 "$WEB_DIR"
 
+# Удаление старых конфигов (от предыдущих версий)
+if [ -f /etc/httpd/conf.d/logviewer.conf ]; then
+    rm -f /etc/httpd/conf.d/logviewer.conf
+    echo -e "${GREEN}✓ Удалён старый конфиг logviewer.conf${NC}"
+fi
+
 # Копирование конфига Apache
 if [ -f "$APP_DIR/apache-logviewer.conf" ]; then
     cp "$APP_DIR/apache-logviewer.conf" /etc/httpd/conf.d/readlog.conf
