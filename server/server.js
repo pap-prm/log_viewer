@@ -362,42 +362,39 @@ app.get('/api/info', (req, res) => {
 });
 
 // Раздача статических файлов (фронтенд)
-// Веб-файлы размещаются в стандартной директории Apache: /var/www/html/readlog/
-const WEB_DIR = '/var/www/html/readlog';
-if (fs.existsSync(WEB_DIR)) {
-  app.use('/readlog', express.static(WEB_DIR));
-  app.use(express.static(WEB_DIR));
-}
-
-// Fallback: если веб-файлы в dist/ рядом с сервером
-const distPaths = [
+// Приоритет: dist/ рядом с server.js > /var/www/html/readlog/
+const staticPaths = [
   path.join(__dirname, 'dist'),
-  path.join(__dirname, '../dist'),
-  path.join(__dirname, '..', 'dist')
+  '/var/www/html/readlog'
 ];
 
-for (const distPath of distPaths) {
-  if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath));
+let staticDir = null;
+for (const dir of staticPaths) {
+  if (fs.existsSync(dir) && fs.existsSync(path.join(dir, 'index.html'))) {
+    staticDir = dir;
+    console.log(`✓ Статические файлы: ${dir}`);
     break;
   }
 }
 
+if (staticDir) {
+  // Раздаём статику
+  app.use('/readlog', express.static(staticDir));
+  app.use(express.static(staticDir));
+} else {
+  console.warn('⚠ Статические файлы не найдены!');
+  console.warn('  Скопируйте dist/ в /opt/readlog/ или /var/www/html/readlog/');
+}
+
 // Все остальные запросы -> index.html (SPA)
 app.get('*', (req, res) => {
-  // Приоритет: Apache директория > dist/ рядом с сервером
-  const indexPaths = [
-    path.join(WEB_DIR, 'index.html'),
-    ...distPaths.map(p => path.join(p, 'index.html'))
-  ];
-  
-  for (const indexPath of indexPaths) {
-    if (fs.existsSync(indexPath)) {
-      return res.sendFile(indexPath);
-    }
+  if (staticDir) {
+    return res.sendFile(path.join(staticDir, 'index.html'));
   }
-  
-  res.status(404).json({ error: 'index.html not found' });
+  res.status(404).json({ 
+    error: 'Статические файлы не найдены',
+    hint: 'Скопируйте dist/ в /opt/readlog/ или /var/www/html/readlog/'
+  });
 });
 
 // Обработка ошибок

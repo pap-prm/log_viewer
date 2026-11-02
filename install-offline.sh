@@ -182,6 +182,13 @@ cd "$APP_DIR"
 if [ ! -d "dist" ]; then
     npm run build
 fi
+
+# Копируем dist/ в корень приложения (fallback для Express)
+if [ -d "dist" ] && [ ! -d "$APP_DIR/dist" ]; then
+    cp -r dist "$APP_DIR/dist"
+    echo -e "${GREEN}✓ dist/ скопирован в $APP_DIR/dist${NC}"
+fi
+
 echo -e "${GREEN}Сборка завершена${NC}"
 
 # 7. Копирование веб-файлов в стандартную директорию Apache
