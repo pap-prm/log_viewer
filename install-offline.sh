@@ -136,11 +136,17 @@ tar -cf - \
     . | tar -xf - -C "$APP_DIR/"
 cd "$APP_DIR"
 
-# Копируем server.js и package.json из server/ в корень для удобства
-if [ -f "$APP_DIR/server/server.js" ] && [ ! -f "$APP_DIR/server.js" ]; then
+# Копируем server.js, websocket.js и package.json из server/ в корень для удобства
+# ВАЖНО: всегда перезаписываем, чтобы получить исправленную версию
+if [ -f "$APP_DIR/server/server.js" ]; then
     cp "$APP_DIR/server/server.js" "$APP_DIR/server.js"
     cp "$APP_DIR/server/package.json" "$APP_DIR/package.json"
-    echo -e "${GREEN}✓ server.js скопирован в корень${NC}"
+    echo -e "${GREEN}✓ server.js скопирован в корень (перезаписан)${NC}"
+fi
+
+if [ -f "$APP_DIR/server/websocket.js" ]; then
+    cp "$APP_DIR/server/websocket.js" "$APP_DIR/websocket.js"
+    echo -e "${GREEN}✓ websocket.js скопирован в корень${NC}"
 fi
 
 # Копируем config.json из server/ в корень если нужно
