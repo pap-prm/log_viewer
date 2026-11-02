@@ -20,8 +20,40 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Сохраняем исходную директорию (где находится архив)
+# Используем readlink -f для получения абсолютного пути
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Если запущено через sudo, SCRIPT_DIR может быть относительным
+if [[ "$SCRIPT_DIR" != /* ]]; then
+    SCRIPT_DIR="$(pwd)/$SCRIPT_DIR"
+fi
 echo -e "${YELLOW}Исходная директория: $SCRIPT_DIR${NC}"
+
+# Проверка наличия dist/ в исходной директории
+echo -e "${YELLOW}Проверка структуры архива...${NC}"
+if [ ! -d "$SCRIPT_DIR/dist" ]; then
+    echo -e "${RED}✗ Ошибка: dist/ не найден в $SCRIPT_DIR${NC}"
+    echo -e "${YELLOW}Содержимое $SCRIPT_DIR:${NC}"
+    ls -la "$SCRIPT_DIR/"
+    echo ""
+    echo -e "${YELLOW}Возможные причины:${NC}"
+    echo -e "${YELLOW}  1. Архив не содержит dist/ (нужно пересобрать на машине с интернетом)${NC}"
+    echo -e "${YELLOW}  2. Неправильная структура архива${NC}"
+    echo ""
+    echo -e "${YELLOW}Для пересборки на машине с интернетом:${NC}"
+    echo -e "${YELLOW}  cd /path/to/project${NC}"
+    echo -e "${YELLOW}  npm install${NC}"
+    echo -e "${YELLOW}  npm run build${NC}"
+    echo -e "${YELLOW}  ./prepare-offline.sh${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ dist/ найден в $SCRIPT_DIR/dist ($(ls "$SCRIPT_DIR/dist" | wc -l) файлов)${NC}"
+
+# Проверка наличия server-deps/
+if [ -d "$SCRIPT_DIR/server-deps" ]; then
+    echo -e "${GREEN}✓ server-deps/ найден в $SCRIPT_DIR/server-deps${NC}"
+else
+    echo -e "${YELLOW}⚠ server-deps/ не найден (серверные зависимости будут установлены из offline-packages/)${NC}"
+fi
 
 # Конфигурация
 APP_NAME="readlog"
@@ -90,6 +122,8 @@ echo -e "${GREEN}✓ Директории созданы${NC}"
 echo -e "${YELLOW}[4/8] Установка приложения...${NC}"
 # Копируем всё через tar с исключениями (не требует rsync)
 # ВАЖНО: node_modules и server-deps НЕ исключаем - они нужны для оффлайн работы
+# Переходим в исходную директорию перед созданием архива
+cd "$SCRIPT_DIR"
 tar -cf - \
     --exclude='*.tar.gz' \
     --exclude='.git' \
@@ -99,7 +133,8 @@ tar -cf - \
     --exclude='install-server.sh' \
     --exclude='npm-cache' \
     --exclude='offline-packages' \
-    -C "$SCRIPT_DIR" . | tar -xf - -C "$APP_DIR/"
+    . | tar -xf - -C "$APP_DIR/"
+cd "$APP_DIR"
 
 # Копируем server.js и package.json из server/ в корень для удобства
 if [ -f "$APP_DIR/server/server.js" ] && [ ! -f "$APP_DIR/server.js" ]; then
@@ -150,7 +185,8 @@ if [ ! -d "$APP_DIR/node_modules/express" ]; then
     if [ -d "$SCRIPT_DIR/server-deps/node_modules" ]; then
         echo -e "${YELLOW}Копируем серверные зависимости из server-deps/...${NC}"
         mkdir -p node_modules
-        cp -r "$SCRIPT_DIR/server-deps/node_modules/"* node_modules/ 2>/dev/null || true
+        # Копируем содержимое server-deps/node_modules в node_modules
+        cp -r "$SCRIPT_DIR/server-deps/node_modules/." node_modules/ 2>/dev/null || cp -r "$SCRIPT_DIR/server-deps/node_modules/"* node_modules/ 2>/dev/null || true
         echo -e "${GREEN}✓ Серверные зависимости скопированы${NC}"
     # Пробуем из offline-packages/
     elif [ -d "$SCRIPT_DIR/offline-packages" ] && ls "$SCRIPT_DIR/offline-packages"/express-*.tgz 1>/dev/null 2>&1; then
@@ -183,22 +219,30 @@ echo -e "${YELLOW}[6/8] Сборка production-версии...${NC}"
 cd "$APP_DIR"
 
 # Проверяем, есть ли dist/ в исходной директории архива
-if [ -d "$SCRIPT_DIR/dist" ]; then
+echo -e "${YELLOW}Проверка dist/ в $SCRIPT_DIR/dist...${NC}"
+if [ -d "$SCRIPT_DIR/dist" ] && [ "$(ls -A "$SCRIPT_DIR/dist" 2>/dev/null)" ]; then
     echo -e "${YELLOW}Копирование dist/ из архива...${NC}"
     rm -rf "$APP_DIR/dist"
     mkdir -p "$APP_DIR/dist"
-    cp -r "$SCRIPT_DIR/dist/"* "$APP_DIR/dist/"
+    # Копируем содержимое dist/ в APP_DIR/dist/
+    cp -r "$SCRIPT_DIR/dist/." "$APP_DIR/dist/" 2>/dev/null || cp -r "$SCRIPT_DIR/dist/"* "$APP_DIR/dist/" 2>/dev/null || {
+        echo -e "${RED}✗ Не удалось скопировать dist/${NC}"
+        echo -e "${YELLOW}Содержимое $SCRIPT_DIR/dist/:${NC}"
+        ls -la "$SCRIPT_DIR/dist/"
+        exit 1
+    }
     chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR/dist"
     chmod -R 755 "$APP_DIR/dist"
-    echo -e "${GREEN}✓ dist/ скопирован из архива${NC}"
-elif [ -d "$APP_DIR/dist" ]; then
+    echo -e "${GREEN}✓ dist/ скопирован из архива ($(ls "$APP_DIR/dist" | wc -l) файлов)${NC}"
+elif [ -d "$APP_DIR/dist" ] && [ "$(ls -A "$APP_DIR/dist" 2>/dev/null)" ]; then
     echo -e "${GREEN}✓ dist/ уже присутствует в $APP_DIR${NC}"
 else
     echo -e "${YELLOW}dist/ не найден, пытаемся собрать...${NC}"
     if [ -f "$APP_DIR/package.json" ]; then
         npm run build 2>/dev/null || {
             echo -e "${RED}✗ Не удалось собрать dist/${NC}"
-            echo -e "${YELLOW}Скопируйте dist/ вручную из архива${NC}"
+            echo -e "${YELLOW}Скопируйте dist/ вручную из архива:${NC}"
+            echo -e "${YELLOW}  sudo cp -r $SCRIPT_DIR/dist/* $APP_DIR/dist/${NC}"
         }
     fi
 fi
@@ -210,10 +254,14 @@ echo -e "${YELLOW}[7/8] Размещение веб-файлов в $WEB_DIR...$
 if [ -d "$APP_DIR/dist" ] && [ "$(ls -A "$APP_DIR/dist" 2>/dev/null)" ]; then
     rm -rf "$WEB_DIR"
     mkdir -p "$WEB_DIR"
-    cp -r "$APP_DIR/dist/"* "$WEB_DIR/"
+    # Копируем содержимое dist/ в WEB_DIR
+    cp -r "$APP_DIR/dist/." "$WEB_DIR/" 2>/dev/null || cp -r "$APP_DIR/dist/"* "$WEB_DIR/" 2>/dev/null || {
+        echo -e "${RED}✗ Не удалось скопировать веб-файлы${NC}"
+        exit 1
+    }
     chown -R root:apache "$WEB_DIR"
     chmod -R 755 "$WEB_DIR"
-    echo -e "${GREEN}✓ Веб-файлы размещены в $WEB_DIR${NC}"
+    echo -e "${GREEN}✓ Веб-файлы размещены в $WEB_DIR ($(ls "$WEB_DIR" | wc -l) файлов)${NC}"
 else
     echo -e "${RED}✗ dist/ не найден или пуст в $APP_DIR${NC}"
     echo -e "${YELLOW}Веб-файлы не скопированы. Скопируйте вручную:${NC}"
