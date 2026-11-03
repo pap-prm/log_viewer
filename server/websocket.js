@@ -10,14 +10,77 @@ class LogWatcher {
     this.watcher = null;
     this.filePositions = new Map(); // Отслеживаем позицию чтения для каждого файла
     this.clients = new Set();
+    this.config = null;
   }
 
-  start(server) {
+  checkWhitelist(clientIp) {
+    if (!this.config || !this.config.security.whitelist.enabled) {
+      return true; // Если whitelist отключен, разрешаем всем
+    }
+
+    const whitelist = this.config.security.whitelist.ips;
+    
+    // Убираем IPv6 prefix если есть
+    const ip = clientIp.replace('::ffff:', '');
+    
+    // Проверяем точное совпадение
+    if (whitelist.includes(ip)) {
+      return true;
+    }
+    
+    // Проверяем диапазоны (простая проверка для CIDR)
+    for (const range of whitelist) {
+      if (range.includes('/')) {
+        // Простая проверка для диапазонов типа 10.0.0.0/8
+        const [network, bits] = range.split('/');
+        const networkParts = network.split('.');
+        const ipParts = ip.split('.');
+        
+        if (bits === '8' && ipParts[0] === networkParts[0]) {
+          return true;
+        } else if (bits === '16' && ipParts[0] === networkParts[0] && ipParts[1] === networkParts[1]) {
+          return true;
+        } else if (bits === '24' && ipParts[0] === networkParts[0] && ipParts[1] === networkParts[1] && ipParts[2] === networkParts[2]) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  start(server, config) {
+    this.config = config;
+    
     // Создаём WebSocket сервер для логов
-    this.wss = new WebSocket.Server({ server, path: '/ws/logs' });
+    this.wss = new WebSocket.Server({ 
+      server, 
+      path: '/ws/logs',
+      verifyClient: (info, callback) => {
+        const clientIp = info.req.socket.remoteAddress;
+        if (this.checkWhitelist(clientIp)) {
+          callback(true);
+        } else {
+          console.warn(`✗ WebSocket подключение отклонено для IP: ${clientIp}`);
+          callback(false, 403, 'Forbidden');
+        }
+      }
+    });
     
     // Создаём WebSocket сервер для уведомлений о файлах
-    this.wssFiles = new WebSocket.Server({ server, path: '/ws/files' });
+    this.wssFiles = new WebSocket.Server({ 
+      server, 
+      path: '/ws/files',
+      verifyClient: (info, callback) => {
+        const clientIp = info.req.socket.remoteAddress;
+        if (this.checkWhitelist(clientIp)) {
+          callback(true);
+        } else {
+          console.warn(`✗ WebSocket подключение отклонено для IP: ${clientIp}`);
+          callback(false, 403, 'Forbidden');
+        }
+      }
+    });
     
     console.log('✓ WebSocket сервер запущен на /ws/logs');
     console.log('✓ WebSocket сервер запущен на /ws/files');

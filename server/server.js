@@ -171,8 +171,8 @@ function checkAuth(req, res, next) {
   next();
 }
 
-// Применяем middleware ко всем API маршрутам
-app.use('/api', checkWhitelist);
+// Применяем middleware ко ВСЕМ запросам (включая статику и WebSocket)
+app.use(checkWhitelist);
 app.use('/api', checkAuth);
 
 // Проверка существования директории с логами
@@ -421,7 +421,7 @@ const server = http.createServer(app);
 
 // Запускаем WebSocket для отслеживания логов в реальном времени
 const logWatcher = new LogWatcher(LOGS_DIR);
-logWatcher.start(server);
+logWatcher.start(server, config);
 
 // Запускаем сервер
 server.listen(PORT, HOST, () => {
