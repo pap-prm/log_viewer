@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useWebSocket } from '../hooks/useWebSocket';
-import { parseLogLine, LogEntry, LogLevel, getLevelBorder } from '../utils/logParser';
+import { parseLogLine, parseLogContent, LogEntry, LogLevel, getLevelBorder } from '../utils/logParser';
+import { fetchLogFile } from '../utils/api';
 
 interface LiveLogViewerProps {
   fileName?: string;
@@ -41,6 +42,35 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
   const wsUrl = getWsUrl();
   const bufferRef = useRef<LogEntry[]>([]);
 
+  // Загрузка начального содержимого файла
+  useEffect(() => {
+    if (!fileName) return;
+
+    // Сбрасываем состояние при смене файла
+    setEntries([]);
+    lineCounter.current = 1;
+    bufferRef.current = [];
+
+    const loadInitialContent = async () => {
+      try {
+        const fileData = await fetchLogFile(fileName);
+        const initialEntries = parseLogContent(fileData.content);
+        
+        // Устанавливаем начальные записи
+        setEntries(initialEntries.slice(-maxLines));
+        
+        // Обновляем счетчик строк
+        lineCounter.current = initialEntries.length + 1;
+        
+        console.log(`✓ Загружено ${initialEntries.length} строк из файла ${fileName}`);
+      } catch (err) {
+        console.error('Ошибка загрузки начального содержимого:', err);
+      }
+    };
+
+    loadInitialContent();
+  }, [fileName, maxLines]);
+
   // Обработка буфера с заданным интервалом
   useEffect(() => {
     if (!isPaused && updateInterval > 0) {
@@ -80,7 +110,7 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
         return entry;
       });
 
-      // Если интервал 0 или 1 и не на паузе, добавляем сразу
+      // Если интервал 1 (мгновенно) и не на паузе, добавляем сразу
       if (updateInterval <= 1 && !isPaused) {
         setEntries(prev => {
           const combined = [...prev, ...newEntries];
