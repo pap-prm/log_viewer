@@ -5,16 +5,18 @@ import { parseLogLine, LogEntry, LogLevel, getLevelBorder } from '../utils/logPa
 interface LiveLogViewerProps {
   fileName?: string;
   maxLines?: number;
+  updateInterval?: number;
 }
 
 export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({ 
   fileName,
-  maxLines = 1000 
+  maxLines = 1000,
+  updateInterval: initialInterval = 5
 }) => {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [isLive, setIsLive] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [updateInterval, setUpdateInterval] = useState(5); // секунды
+  const [updateInterval, setUpdateInterval] = useState(initialInterval); // секунды
   const containerRef = useRef<HTMLDivElement>(null);
   const lineCounter = useRef(1);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
