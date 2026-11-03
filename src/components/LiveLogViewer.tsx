@@ -6,17 +6,17 @@ interface LiveLogViewerProps {
   fileName?: string;
   maxLines?: number;
   updateInterval?: number;
+  isPaused?: boolean;
 }
 
 export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({ 
   fileName,
   maxLines = 1000,
-  updateInterval: initialInterval = 5
+  updateInterval = 1,
+  isPaused = false
 }) => {
   const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [isLive, setIsLive] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [updateInterval, setUpdateInterval] = useState(initialInterval); // секунды
   const containerRef = useRef<HTMLDivElement>(null);
   const lineCounter = useRef(1);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -43,7 +43,7 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
 
   // Обработка буфера с заданным интервалом
   useEffect(() => {
-    if (isLive && updateInterval > 0) {
+    if (!isPaused && updateInterval > 0) {
       intervalRef.current = setInterval(() => {
         if (bufferRef.current.length > 0) {
           const newEntries = [...bufferRef.current];
@@ -66,7 +66,7 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
         intervalRef.current = null;
       }
     };
-  }, [isLive, updateInterval, maxLines]);
+  }, [isPaused, updateInterval, maxLines]);
 
   const handleWebSocketMessage = useCallback((message: any) => {
     if (message.type === 'new_lines' && message.lines) {
@@ -80,8 +80,8 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
         return entry;
       });
 
-      // Если интервал 0 или 1, добавляем сразу
-      if (updateInterval <= 1) {
+      // Если интервал 0 или 1 и не на паузе, добавляем сразу
+      if (updateInterval <= 1 && !isPaused) {
         setEntries(prev => {
           const combined = [...prev, ...newEntries];
           if (combined.length > maxLines) {
@@ -94,7 +94,7 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
         bufferRef.current = [...bufferRef.current, ...newEntries];
       }
     }
-  }, [fileName, maxLines, updateInterval]);
+  }, [fileName, maxLines, updateInterval, isPaused]);
 
   const { isConnected, connect, disconnect } = useWebSocket({
     url: wsUrl,
@@ -112,10 +112,10 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
 
   // Автопрокрутка вниз
   useEffect(() => {
-    if (autoScroll && isLive && containerRef.current) {
+    if (autoScroll && !isPaused && containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [entries, autoScroll, isLive]);
+  }, [entries, autoScroll, isPaused]);
 
   // Подписка на файл при изменении fileName
   useEffect(() => {
@@ -124,13 +124,11 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
     }
   }, [isConnected, fileName]);
 
-  const handleToggleLive = () => {
-    if (isLive) {
+  const handleDisconnect = () => {
+    if (isConnected) {
       disconnect();
-      setIsLive(false);
     } else {
       connect();
-      setIsLive(true);
     }
   };
 
@@ -220,26 +218,26 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={handleToggleLive}
+            onClick={handleDisconnect}
             className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-              isLive
+              isConnected
                 ? 'bg-red-600 hover:bg-red-500 text-white'
                 : 'bg-green-600 hover:bg-green-500 text-white'
             }`}
           >
-            {isLive ? (
+            {isConnected ? (
               <>
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <rect x="5" y="5" width="10" height="10" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                 </svg>
-                Остановить
+                Отключить
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Запустить
+                Подключить
               </>
             )}
           </button>
@@ -257,23 +255,6 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
             </svg>
             Автопрокрутка
           </button>
-
-          {/* Выбор интервала обновления */}
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-400">Обновление:</label>
-            <select
-              value={updateInterval}
-              onChange={(e) => setUpdateInterval(Number(e.target.value))}
-              className="bg-gray-700 text-gray-200 text-xs rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none"
-            >
-              <option value={1}>1 сек</option>
-              <option value={5}>5 сек</option>
-              <option value={10}>10 сек</option>
-              <option value={15}>15 сек</option>
-              <option value={30}>30 сек</option>
-              <option value={60}>60 сек</option>
-            </select>
-          </div>
 
           <button
             onClick={handleClear}
@@ -303,10 +284,10 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               <p className="text-sm">
-                {isLive ? 'Ожидание новых строк логов...' : 'Live режим отключён'}
+                {isPaused ? 'Live режим приостановлен' : 'Ожидание новых строк логов...'}
               </p>
               <p className="text-xs text-gray-600 mt-2">
-                {isLive ? 'Новые строки будут появляться здесь в реальном времени' : 'Нажмите "Запустить" для начала отслеживания'}
+                {isPaused ? 'Нажмите "Старт" для возобновления' : 'Новые строки будут появляться здесь в реальном времени'}
               </p>
             </div>
           </div>

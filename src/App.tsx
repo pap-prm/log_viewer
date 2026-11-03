@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FileList } from './components/FileList';
-import { LogViewer } from './components/LogViewer';
 import { LiveLogViewer } from './components/LiveLogViewer';
 import { demoFiles } from './utils/demoData';
 import { LogFile } from './utils/logParser';
@@ -31,7 +30,8 @@ function App() {
   const [serverMode, setServerMode] = useState(false);
   const [serverConnected, setServerConnected] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState<'static' | 'live' | 5 | 10 | 15 | 20 | 30 | 60>('static');
+  const [liveInterval, setLiveInterval] = useState<1 | 5 | 10 | 15 | 20 | 30 | 60>(1);
+  const [isLivePaused, setIsLivePaused] = useState(false);
   const [showAddFolderDialog, setShowAddFolderDialog] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderPath, setNewFolderPath] = useState('');
@@ -377,21 +377,48 @@ function App() {
             {loading ? 'Загрузка...' : 'Загрузить'}
           </button>
           
-          {/* Выпадающий список режимов просмотра */}
-          <select
-            value={viewMode}
-            onChange={(e) => setViewMode(e.target.value as any)}
-            className="bg-gray-700 text-gray-200 text-xs rounded-md px-3 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none cursor-pointer"
-          >
-            <option value="static">Статика</option>
-            <option value="live">Live (мгновенно)</option>
-            <option value={5}>Live (5 сек)</option>
-            <option value={10}>Live (10 сек)</option>
-            <option value={15}>Live (15 сек)</option>
-            <option value={20}>Live (20 сек)</option>
-            <option value={30}>Live (30 сек)</option>
-            <option value={60}>Live (60 сек)</option>
-          </select>
+          {/* Управление Live режимом */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsLivePaused(!isLivePaused)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                isLivePaused
+                  ? 'bg-green-600 hover:bg-green-500 text-white'
+                  : 'bg-red-600 hover:bg-red-500 text-white'
+              }`}
+              title={isLivePaused ? 'Возобновить Live режим' : 'Приостановить Live режим'}
+            >
+              {isLivePaused ? (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                  </svg>
+                  Старт
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                    <rect x="5" y="5" width="10" height="10" />
+                  </svg>
+                  Стоп
+                </>
+              )}
+            </button>
+            
+            <select
+              value={liveInterval}
+              onChange={(e) => setLiveInterval(Number(e.target.value) as any)}
+              className="bg-gray-700 text-gray-200 text-xs rounded-md px-3 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none cursor-pointer"
+            >
+              <option value={1}>Мгновенно</option>
+              <option value={5}>5 сек</option>
+              <option value={10}>10 сек</option>
+              <option value={15}>15 сек</option>
+              <option value={20}>20 сек</option>
+              <option value={30}>30 сек</option>
+              <option value={60}>60 сек</option>
+            </select>
+          </div>
 
           {currentFile && (
             <button
@@ -539,20 +566,12 @@ function App() {
 
         {/* Log viewer */}
         <main className="flex-1 overflow-hidden">
-          {viewMode === 'live' || typeof viewMode === 'number' ? (
+          {selectedFile ? (
             <LiveLogViewer 
-              fileName={selectedFile || undefined} 
-              updateInterval={typeof viewMode === 'number' ? viewMode : 1}
+              fileName={selectedFile}
+              updateInterval={liveInterval}
+              isPaused={isLivePaused}
             />
-          ) : loading && !currentFile?.content ? (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                <p className="text-sm">Загрузка файла...</p>
-              </div>
-            </div>
-          ) : currentFile?.content ? (
-            <LogViewer content={currentFile.content} fileName={currentFile.name} />
           ) : (
             <div className="flex items-center justify-center h-full text-gray-500">
               <div className="text-center">
@@ -560,7 +579,7 @@ function App() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 <p className="text-lg font-medium mb-2">Выберите файл лога</p>
-                <p className="text-sm text-gray-600">Выберите файл из списка слева или загрузите свой</p>
+                <p className="text-sm text-gray-600">Выберите файл из списка слева</p>
                 <p className="text-xs text-gray-700 mt-4">
                   {serverMode ? 'Режим сервера — файлы загружаются с /opt/assembly_visual/logs/' : 'Локальный режим — можно перетащить файл в это окно'}
                 </p>
